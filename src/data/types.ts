@@ -95,9 +95,13 @@ export interface Member {
   done: string[];
   /** Hjulets resultat pr. stop: stopIndeks -> konsekvens-id */
   spins?: Record<string, string>;
+  /** Stop hvor man sprang konsekvensen over og gav en omgang i stedet */
+  bailed?: Record<string, boolean>;
   /** Hemmelig mission (id fra MISSIONER) */
   mission?: string;
   missionDone?: boolean;
+  /** Gav op paa missionen og gav en omgang i stedet */
+  missionFailed?: boolean;
   /** Bingoplade: 9 indeks i BINGO_TILES */
   bingo?: number[];
   /** Krydsede felter (0-8) */

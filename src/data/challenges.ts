@@ -313,9 +313,11 @@ export interface MemberStats {
   challenges: number;
   cheers: number;
   bingoLines: number;
+  bailed: number;
   rounds: number;
   stop: number;
   missionDone: boolean;
+  missionFailed: boolean;
   joinedAt: number;
 }
 
@@ -450,6 +452,16 @@ export function teases(all: MemberStats[], t: NightTotals): string[] {
   if (t.rounds === 0) out.push('Ikke én eneste omgang blev givet i aften. Flot. Virkelig flot.');
   else if (gratister.length && all.length > 1) {
     out.push(`${gratister.map((s) => s.name).join(', ')} gav ikke én omgang. Det bliver husket til næste fredag.`);
+  }
+
+  const opgivere = all.filter((s) => s.missionFailed);
+  if (opgivere.length) {
+    out.push(`${opgivere.map((s) => s.name).join(', ')} kiksede sin hemmelige mission og måtte give en omgang. Tak for øllen.`);
+  }
+
+  const springere = all.filter((s) => s.bailed > 0);
+  if (springere.length) {
+    out.push(`${springere.map((s) => `${s.name} (${s.bailed})`).join(', ')} sprang konsekvenser over og betalte sig fra det. Vi tager imod øllen, men vi dømmer stadig.`);
   }
 
   const kujoner = all.filter((s) => s.challenges === 0);

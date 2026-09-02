@@ -321,17 +321,42 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
     });
   };
 
-  /** Giver en omgang til hele holdet – kun giveren får point, men alle skal se det. */
-  const giveRound = async () => {
-    if (!confirm(`Giver du en omgang til ${members.length === 1 ? 'holdet' : `alle ${members.length}`}? Det giver ${XP.round} point.`)) return;
+  /**
+   * Giver en omgang til hele holdet – kun giveren får point, men alle skal se det.
+   * `grund` bruges når omgangen er en konsekvens, fx en mission man gav op på.
+   */
+  const giveRound = async (grund?: { feed: string; fejring: string }) => {
+    if (!grund && !confirm(`Giver du en omgang til ${members.length === 1 ? 'holdet' : `alle ${members.length}`}? Det giver ${XP.round} point.`)) return;
     await live.setPath(code, `members/${me.id}/rounds`, (me.rounds || 0) + 1);
     await live.setPath(code, `members/${me.id}/xp`, me.xp + XP.round);
     await live.pushFeed(code, {
       t: Date.now(), type: 'drink', memberId: me.id, name: me.name, emoji: me.emoji,
-      text: 'gav en omgang til hele holdet! 🍻', xp: XP.round,
+      text: grund?.feed ?? 'gav en omgang til hele holdet! 🍻', xp: XP.round,
     });
-    await announce('omgang', 'giver en omgang til hele holdet! Sig pænt tak.');
-    toast(`Du gav en omgang – +${XP.round} point 🍻`);
+    await announce('omgang', grund?.fejring ?? 'giver en omgang til hele holdet! Sig pænt tak.');
+    toast(`Omgang givet – +${XP.round} point 🍻`);
+  };
+
+  /** Tør man ikke konsekvensen, koster det en omgang til holdet. */
+  const bailChallenge = async (c: Challenge) => {
+    if (me.stop < 0) return;
+    if (!confirm('Springer du konsekvensen over? Så giver du en omgang til holdet i stedet.')) return;
+    await live.setPath(code, `members/${me.id}/bailed/${stopKey}`, true);
+    await giveRound({
+      feed: `sprang konsekvensen over og giver en omgang: "${c.text}"`,
+      fejring: 'turde ikke konsekvensen – og giver en omgang i stedet!',
+    });
+  };
+
+  /** Missionen mislykkedes: så er det omgang til holdet. */
+  const failMission = async () => {
+    if (!myMission) return;
+    if (!confirm('Gav du op? Så skylder du holdet en omgang. Den giver til gengæld point.')) return;
+    await live.setPath(code, `members/${me.id}/missionFailed`, true);
+    await giveRound({
+      feed: 'klarede ikke sin hemmelige mission og giver en omgang! 🍻',
+      fejring: 'kiksede sin hemmelige mission – og giver en omgang som straf!',
+    });
   };
 
   const endNight = async () => {
@@ -478,7 +503,7 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
               </div>
             )}
 
-            <button className="bigbtn" onClick={giveRound}>🍻 GIV EN OMGANG</button>
+            <button className="bigbtn" onClick={() => giveRound()}>🍻 GIV EN OMGANG</button>
 
             <div className="btnrow" style={{ marginTop: 10 }}>
               <button className="btn" onClick={addDrink}>🍺 +1 genstand</button>
@@ -513,9 +538,16 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
               </div>
               <p className="small" style={{ margin: '8px 0 0', fontWeight: 700 }}>{myMission.text}</p>
               <p className="tiny muted" style={{ margin: '6px 0 0' }}>Sig det ikke til nogen. De andre kan ikke se hvad du har fået.</p>
-              {me.missionDone
-                ? <div className="chip chip--open" style={{ marginTop: 10 }}>✓ Fuldført</div>
-                : <button className="btn btn--sm btn--primary" style={{ marginTop: 10 }} onClick={completeMission}>✓ Jeg klarede den</button>}
+              {me.missionDone ? (
+                <div className="chip chip--open" style={{ marginTop: 10 }}>✓ Fuldført</div>
+              ) : me.missionFailed ? (
+                <div className="chip chip--warn" style={{ marginTop: 10 }}>🍻 Du gav op – og gav en omgang</div>
+              ) : (
+                <div className="btnrow" style={{ marginTop: 10 }}>
+                  <button className="btn btn--sm btn--primary" onClick={completeMission}>✓ Jeg klarede den</button>
+                  <button className="btn btn--sm" onClick={failMission}>🍻 Jeg gav op – giv en omgang</button>
+                </div>
+              )}
             </div>
           )}
 
@@ -623,6 +655,8 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
           spunId={spunId}
           onSpin={recordSpin}
           onComplete={completeChallenge}
+          onBail={bailChallenge}
+          bailed={!!me.bailed?.[stopKey]}
         />
       )}
 
@@ -712,13 +746,15 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
 
 /* ---------------- hjul-fanen ---------------- */
 
-function WheelTab({ bar, done, spun, spunId, onSpin, onComplete }: {
+function WheelTab({ bar, done, spun, spunId, bailed, onSpin, onComplete, onBail }: {
   bar: Bar | null;
   done: string[];
   spun: Record<string, string>;
   spunId?: string;
+  bailed: boolean;
   onSpin: (c: Challenge) => Promise<void>;
   onComplete: (c: Challenge) => Promise<void>;
+  onBail: (c: Challenge) => Promise<void>;
 }) {
   // Alt man selv har fået før, ryger ud af puljen – så bliver det sjældent det samme to gange.
   const brugte = useMemo(() => [...done, ...Object.values(spun || {})], [done, spun]);
@@ -756,10 +792,13 @@ function WheelTab({ bar, done, spun, spunId, onSpin, onComplete }: {
         <ChallengeCard c={vist}>
           {gennemfoert ? (
             <div className="chip chip--open" style={{ marginTop: 12 }}>✓ Gennemført</div>
+          ) : bailed ? (
+            <div className="chip chip--warn" style={{ marginTop: 12 }}>🍻 Sprunget over – du gav en omgang</div>
           ) : (
-            <button className="btn btn--primary btn--block" style={{ marginTop: 12 }} onClick={() => onComplete(vist)}>
-              ✓ Gennemført
-            </button>
+            <div className="btnrow" style={{ marginTop: 12 }}>
+              <button className="btn btn--primary" onClick={() => onComplete(vist)}>✓ Gennemført</button>
+              <button className="btn" onClick={() => onBail(vist)}>🍻 Tør ikke – giv en omgang</button>
+            </div>
           )}
         </ChallengeCard>
         <div className="card card--pad">
@@ -886,9 +925,11 @@ function Finale({ session, meId }: { session: Session; meId: string | null }) {
     challenges: (m.done || []).length,
     cheers: Object.values(session.cheers || {}).filter((r) => r && r[m.id]).length,
     bingoLines: m.bingoLines || 0,
+    bailed: Object.keys(m.bailed || {}).length,
     rounds: m.rounds || 0,
     stop: m.stop ?? -1,
     missionDone: !!m.missionDone,
+    missionFailed: !!m.missionFailed,
     joinedAt: m.joinedAt,
   }));
 
