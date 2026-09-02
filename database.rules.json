@@ -1,0 +1,29 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "sessions": {
+      "$code": {
+        ".read": "$code.length >= 4 && $code.length <= 8",
+        ".write": "$code.length >= 4 && $code.length <= 8",
+        ".validate": "newData.hasChildren(['code', 'crawl'])",
+        "code": { ".validate": "newData.isString() && newData.val().length <= 8" },
+        "members": {
+          "$mid": {
+            "name": { ".validate": "newData.isString() && newData.val().length <= 24" },
+            "emoji": { ".validate": "newData.isString() && newData.val().length <= 8" },
+            "xp": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000" },
+            "lat": { ".validate": "newData.isNumber() || newData.val() == null" },
+            "lng": { ".validate": "newData.isNumber() || newData.val() == null" }
+          }
+        },
+        "feed": {
+          "$eid": {
+            "text": { ".validate": "newData.isString() && newData.val().length <= 400" },
+            "name": { ".validate": "newData.isString() && newData.val().length <= 24" }
+          }
+        }
+      }
+    }
+  }
+}

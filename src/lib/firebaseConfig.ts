@@ -24,11 +24,13 @@
  * men kun i din egen browser (og andre faner på samme computer).
  */
 export const FIREBASE_CONFIG = {
-  apiKey: '',
-  authDomain: '',
-  databaseURL: '',
-  projectId: '',
-  appId: '',
+  apiKey: 'AIzaSyBNdRv9AbClpUS8Aa2bihznbqMQt0bSx0U',
+  authDomain: 'mfc200.firebaseapp.com',
+  databaseURL: 'https://mfc200-default-rtdb.europe-west1.firebasedatabase.app',
+  projectId: 'mfc200',
+  storageBucket: 'mfc200.firebasestorage.app',
+  messagingSenderId: '798803031205',
+  appId: '1:798803031205:web:f27a26df2ec9f4d68ac94c',
 };
 
 export const firebaseReady = (): boolean =>
