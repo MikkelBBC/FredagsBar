@@ -497,6 +497,13 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
             onJoin={joinCheers}
           />
 
+          <div className="card card--pad center">
+            <button className="bigbtn" onClick={() => giveRound()}>🍻 GIV EN OMGANG</button>
+            <p className="tiny muted" style={{ margin: '10px 0 0' }}>
+              Du får {XP.round} point, og hele holdet får det at vide med det samme.
+            </p>
+          </div>
+
           {/* Hvor er jeg, og hvor langt er der videre */}
           <div className="card card--pad">
             <div className="row row--between" style={{ marginBottom: 10 }}>
@@ -527,9 +534,7 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
               </div>
             )}
 
-            <button className="bigbtn" onClick={() => giveRound()}>🍻 GIV EN OMGANG</button>
-
-            <div className="btnrow" style={{ marginTop: 10 }}>
+            <div className="btnrow">
               <button className="btn" onClick={addDrink}>🍺 +1 genstand</button>
               <button className="btn btn--primary" onClick={() => setTab('rute')}>📍 Tjek ind</button>
             </div>
