@@ -25,12 +25,14 @@ export interface MapViewProps {
   /** Numre på markørerne, fx rækkefølgen i en tur. */
   numbers?: Record<string, number>;
   userPos?: LatLng | null;
+  /** Andre deltagere der deler position i en live-session. */
+  people?: { id: string; name: string; emoji: string; lat: number; lng: number; stale?: boolean }[];
   className?: string;
   fitKey?: string;
   interactive?: boolean;
 }
 
-export function MapView({ bars, now, selectedId, onSelect, route, numbers, userPos, className, fitKey, interactive = true }: MapViewProps) {
+export function MapView({ bars, now, selectedId, onSelect, route, numbers, userPos, people, className, fitKey, interactive = true }: MapViewProps) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const tiles = useRef<L.TileLayer | null>(null);
@@ -38,6 +40,7 @@ export function MapView({ bars, now, selectedId, onSelect, route, numbers, userP
   const layer = useRef<L.LayerGroup | null>(null);
   const line = useRef<L.Polyline | null>(null);
   const me = useRef<L.Marker | null>(null);
+  const peopleLayer = useRef<L.LayerGroup | null>(null);
   const lastFit = useRef<string>('');
 
   // Opret kortet én gang.
@@ -58,6 +61,7 @@ export function MapView({ bars, now, selectedId, onSelect, route, numbers, userP
     applyTheme(m.getContainer());
     if (interactive) L.control.zoom({ position: 'topright' }).addTo(m);
     layer.current = L.layerGroup().addTo(m);
+    peopleLayer.current = L.layerGroup().addTo(m);
     m.on('click', () => onSelect?.(null));
     map.current = m;
     setTimeout(() => m.invalidateSize(), 60);
@@ -140,6 +144,22 @@ export function MapView({ bars, now, selectedId, onSelect, route, numbers, userP
       }).addTo(m);
     }
   }, [userPos]);
+
+  // Deltagere der deler position.
+  useEffect(() => {
+    const lg = peopleLayer.current;
+    if (!lg) return;
+    lg.clearLayers();
+    for (const p of people || []) {
+      const icon = L.divIcon({
+        html: `<div class="mk-person${p.stale ? ' is-stale' : ''}"><span>${p.emoji}</span><b>${p.name}</b></div>`,
+        className: '',
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      });
+      L.marker([p.lat, p.lng], { icon, zIndexOffset: 1500, interactive: false }).addTo(lg);
+    }
+  }, [people]);
 
   // Zoom så alt er synligt (kun når nøglen ændrer sig).
   useEffect(() => {

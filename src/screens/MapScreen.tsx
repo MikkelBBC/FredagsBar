@@ -5,7 +5,7 @@ import { fmtDistance, googleMapsDirections, walkMeters, walkMinutes } from '../l
 import { navigate } from '../lib/router';
 import { useStore } from '../lib/store';
 import { MapView } from '../components/MapView';
-import { AddToCrawlButton, FavButton, StatusChip, logoUrl } from '../components/ui';
+import { AddToCrawlButton, FacChip, FavButton, StatusChip, logoUrl } from '../components/ui';
 
 type Mode = 'alle' | 'aabne' | 'favoritter' | 'tur';
 
@@ -90,17 +90,31 @@ export function MapScreen({ now, focus }: { now: Date; focus?: string }) {
         {selected && (
           <div className="mapsheet">
             <div className="row" style={{ alignItems: 'flex-start' }}>
-              <img src={logoUrl(selected)} alt="" style={{ width: 46, height: 46, borderRadius: 12, objectFit: 'contain', background: 'var(--surface-2)', padding: 3, border: '1px solid var(--border)' }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <b className="truncate" style={{ display: 'block' }}>{selected.name}</b>
-                <div className="small muted truncate">{selected.address.split(',')[0]}</div>
-                <div className="row row--wrap" style={{ gap: 6, marginTop: 6 }}>
-                  <StatusChip bar={selected} now={now} />
-                  {pos && <span className="chip">🚶 {fmtDistance(walkMeters(pos, selected))} · {walkMinutes(walkMeters(pos, selected))} min</span>}
-                </div>
-              </div>
+              <button
+                className="row"
+                style={{ alignItems: 'flex-start', flex: 1, minWidth: 0, padding: 0, textAlign: 'left' }}
+                onClick={() => navigate('/bar/' + selected.id)}
+              >
+                <img src={logoUrl(selected)} alt="" style={{ width: 46, height: 46, borderRadius: 12, objectFit: 'contain', background: 'var(--surface-2)', padding: 3, border: '1px solid var(--border)' }} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <b className="truncate" style={{ display: 'block' }}>{selected.name}</b>
+                  <span className="small muted truncate" style={{ display: 'block' }}>{selected.subtitle}</span>
+                  <span className="tiny muted truncate" style={{ display: 'block' }}>{selected.address.split(',')[0]}</span>
+                </span>
+              </button>
               <button className="iconbtn" style={{ background: 'var(--surface-2)', color: 'var(--muted)' }} onClick={() => setSel(null)}>✕</button>
             </div>
+
+            <div className="row row--wrap" style={{ gap: 6, marginTop: 8 }}>
+              <StatusChip bar={selected} now={now} />
+              <FacChip id={selected.faculty} />
+              {pos && <span className="chip">🚶 {fmtDistance(walkMeters(pos, selected))} · {walkMinutes(walkMeters(pos, selected))} min</span>}
+              {selected.price && <span className="chip">💰 {selected.price}</span>}
+            </div>
+
+            <p className="tiny muted" style={{ margin: '8px 0 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+              {selected.about}
+            </p>
             <div className="btnrow" style={{ marginTop: 10 }}>
               <button className="btn btn--sm btn--primary" onClick={() => navigate('/bar/' + selected.id)}>Se bar</button>
               <AddToCrawlButton bar={selected} />

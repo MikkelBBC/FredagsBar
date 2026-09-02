@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BAR_BY_ID } from '../data/bars';
 import type { Bar, FeedEvent, Member, Session } from '../data/types';
 import {
@@ -33,7 +33,7 @@ const FEED_ICO: Record<string, string> = {
 };
 
 export function SessionScreen({ code, now }: { code: string; now: Date }) {
-  const { state, toast, pos, dispatch } = useStore();
+  const { state, toast, pos, locate, dispatch } = useStore();
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [myId, setMyId] = useState<string | null>(() => localStorage.getItem(meKey(code)));
 
@@ -85,7 +85,7 @@ export function SessionScreen({ code, now }: { code: string; now: Date }) {
 
   if (!me) return <JoinCard session={session} onJoin={join} defaultName={state.name} />;
 
-  return <SessionBoard session={session} me={me} now={now} pos={pos} toast={toast} />;
+  return <SessionBoard session={session} me={me} now={now} pos={pos} locate={locate} toast={toast} />;
 }
 
 /* ---------------- tilmelding ---------------- */
@@ -159,12 +159,13 @@ interface BoardProps {
   me: Member;
   now: Date;
   pos: LatLng | null;
+  locate: () => void;
   toast: (s: string) => void;
 }
 
 type Tab = 'live' | 'hjul' | 'bingo' | 'rute';
 
-function SessionBoard({ session, me, now, pos, toast }: BoardProps) {
+function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
   const code = session.code;
   const modes = session.modes || { wheel: true, rules: true, missions: true, bingo: false, finale: true };
   const [tab, setTab] = useState<Tab>('live');
@@ -179,6 +180,50 @@ function SessionBoard({ session, me, now, pos, toast }: BoardProps) {
   const nextBar = me.stop + 1 < stops.length ? stops[me.stop + 1] : null;
   const currentRule = modes.rules && me.stop >= 0 ? REGLER.find((r) => r.id === session.rules?.[String(me.stop)]) : undefined;
   const myMission = modes.missions && me.mission ? MISSIONER.find((m) => m.id === me.mission) : undefined;
+
+  // ---- live-position ----
+  const sharing = !!me.sharing;
+  const lastSent = useRef<{ t: number; lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    if (!sharing || !pos) return;
+    const prev = lastSent.current;
+    const moved = prev ? walkMeters(prev, pos) : Infinity;
+    const age = prev ? Date.now() - prev.t : Infinity;
+    if (moved < 12 && age < 25000) return;
+    lastSent.current = { t: Date.now(), lat: pos.lat, lng: pos.lng };
+    live.setPath(code, `members/${me.id}/lat`, pos.lat);
+    live.setPath(code, `members/${me.id}/lng`, pos.lng);
+    live.setPath(code, `members/${me.id}/posAt`, Date.now());
+  }, [sharing, pos, code, me.id]);
+
+  const toggleSharing = async () => {
+    if (sharing) {
+      await live.setPath(code, `members/${me.id}/sharing`, false);
+      await live.setPath(code, `members/${me.id}/lat`, null);
+      await live.setPath(code, `members/${me.id}/lng`, null);
+      lastSent.current = null;
+      toast('Du deler ikke længere din position');
+    } else {
+      if (!pos) locate();
+      await live.setPath(code, `members/${me.id}/sharing`, true);
+      toast('De andre kan nu se hvor du er');
+    }
+  };
+
+  /** Deltagere der deler position – dem selv undtaget. */
+  const people = useMemo(() => members
+    .filter((m) => m.id !== me.id && typeof m.lat === 'number' && typeof m.lng === 'number')
+    .map((m) => ({
+      id: m.id,
+      name: m.name,
+      emoji: m.emoji,
+      lat: m.lat as number,
+      lng: m.lng as number,
+      stale: now.getTime() - (m.posAt || 0) > 5 * 60000,
+    })), [members, me.id, now]);
+
+  const sharingCount = members.filter((m) => typeof m.lat === 'number').length;
 
   const bump = async (field: 'drinks' | 'water', xp: number, type: 'drink' | 'water', text: string) => {
     await live.setPath(code, `members/${me.id}/${field}`, (me[field] || 0) + 1);
@@ -381,6 +426,22 @@ function SessionBoard({ session, me, now, pos, toast }: BoardProps) {
           )}
 
           <div className="card card--pad">
+            <div className="row row--between">
+              <div style={{ minWidth: 0 }}>
+                <b className="small">📡 Del din position</b>
+                <div className="tiny muted">
+                  {sharing
+                    ? pos ? `De andre kan se hvor du er · ${sharingCount} deler lige nu` : 'Venter på GPS…'
+                    : 'Så kan I se hinanden på kortet under Ruten'}
+                </div>
+              </div>
+              <button className={'btn btn--sm' + (sharing ? '' : ' btn--primary')} onClick={toggleSharing}>
+                {sharing ? 'Slå fra' : 'Slå til'}
+              </button>
+            </div>
+          </div>
+
+          <div className="card card--pad">
             <h3 style={{ marginBottom: 10 }}>Stilling</h3>
             <div className="stack" style={{ gap: 8 }}>
               {members.map((m, i) => {
@@ -399,6 +460,12 @@ function SessionBoard({ session, me, now, pos, toast }: BoardProps) {
                         {ml.ico} {ml.title} · 🍺 {m.drinks} · 💧 {m.water}
                         {m.stop >= 0 && stops[m.stop] ? ` · 📍 ${stops[m.stop].name}` : ''}
                       </div>
+                      {m.id !== me.id && pos && typeof m.lat === 'number' && typeof m.lng === 'number' && (
+                        <div className="tiny" style={{ color: 'var(--accent-2)', fontWeight: 700 }}>
+                          📡 {fmtDistance(walkMeters(pos, { lat: m.lat, lng: m.lng }))} fra dig
+                          {now.getTime() - (m.posAt || 0) > 5 * 60000 ? ' (gammel)' : ''}
+                        </div>
+                      )}
                     </div>
                     <b className="nowrap">{m.xp} XP</b>
                   </div>
@@ -456,10 +523,21 @@ function SessionBoard({ session, me, now, pos, toast }: BoardProps) {
               numbers={Object.fromEntries(stops.map((b, i) => [b.id, i + 1]))}
               route={stops.length > 1 ? stops.map((b) => [b.lat, b.lng] as [number, number]) : null}
               userPos={pos}
+              people={people}
               className="map--card"
               fitKey={'sess:' + code}
             />
           </div>
+
+          {people.length > 0 ? (
+            <p className="tiny muted center" style={{ margin: '-4px 0 0' }}>
+              📡 {people.length} {people.length === 1 ? 'ven deler' : 'venner deler'} position lige nu
+            </p>
+          ) : (
+            <p className="tiny muted center" style={{ margin: '-4px 0 0' }}>
+              Ingen deler position endnu – slå det til under Stilling så I kan se hinanden her.
+            </p>
+          )}
 
           <div className="summary">
             <div className="bigstat"><b>{stops.length}</b><span>stop</span></div>

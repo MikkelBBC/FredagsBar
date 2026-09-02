@@ -101,6 +101,11 @@ export interface Member {
   /** Krydsede felter (0-8) */
   bingoMarks?: number[];
   bingoLines?: number;
+  /** Live-position - kun sat hvis personen selv har slaaet deling til */
+  lat?: number;
+  lng?: number;
+  posAt?: number;
+  sharing?: boolean;
 }
 
 export type FeedType = 'join' | 'drink' | 'water' | 'checkin' | 'challenge' | 'msg' | 'cheers';
