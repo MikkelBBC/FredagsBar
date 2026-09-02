@@ -5,7 +5,7 @@ import {
   BINGO_LINES, BINGO_TILES, MISSIONER, REGLER,
   drawBingo, drawChallenges, levelFor, type Challenge,
 } from '../data/challenges';
-import { XP, feedList, live, liveIsShared, memberList, newMember, sessionUrl } from '../lib/live';
+import { XP, clearActiveSession, feedList, live, liveIsShared, memberList, newMember, sessionUrl, setActiveSession } from '../lib/live';
 import { buildTimeline } from '../lib/crawl';
 import { fmtDateLong, fmtTime } from '../lib/format';
 import { copyText, nativeShare } from '../lib/share';
@@ -40,6 +40,11 @@ export function SessionScreen({ code, now }: { code: string; now: Date }) {
   useEffect(() => live.subscribe(code, (s) => setSession(s)), [code]);
 
   const me = myId && session ? session.members?.[myId] : null;
+
+  // Husk sessionen, så bundmenuen kan føre en tilbage.
+  useEffect(() => {
+    if (me) setActiveSession(code);
+  }, [code, me?.id]);
 
   // Hold "sidst set" frisk så man kan se hvem der stadig er med.
   useEffect(() => {
@@ -502,6 +507,16 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
               <button className="btn btn--primary" onClick={shareSession}>↗ Del link</button>
               <button className="btn" onClick={async () => { await copyText(code); toast('Kode kopieret'); }}>📋 Kopiér kode</button>
             </div>
+            <p className="tiny muted" style={{ margin: '14px 0 8px' }}>
+              Du kan roligt gå ud i kortet eller barlisten undervejs – der ligger en bjælke
+              nederst der fører dig tilbage hertil.
+            </p>
+            <button className="btn btn--sm btn--danger" onClick={() => {
+              if (!confirm('Forlad turen? Dine point bliver stående, og du kan komme tilbage med linket.')) return;
+              clearActiveSession();
+              toast('Du har forladt turen');
+              navigate('/');
+            }}>Forlad turen</button>
           </div>
         </>
       )}

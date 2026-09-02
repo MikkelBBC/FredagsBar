@@ -20,6 +20,8 @@ export interface MapViewProps {
   now: Date;
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
+  /** Kaldes når man trykker et sted på kortet (bruges til at sætte position manuelt). */
+  onMapClick?: (p: LatLng) => void;
   /** Rutepunkter (lat,lng) der tegnes som streg. */
   route?: [number, number][] | null;
   /** Numre på markørerne, fx rækkefølgen i en tur. */
@@ -32,7 +34,10 @@ export interface MapViewProps {
   interactive?: boolean;
 }
 
-export function MapView({ bars, now, selectedId, onSelect, route, numbers, userPos, people, className, fitKey, interactive = true }: MapViewProps) {
+export function MapView({ bars, now, selectedId, onSelect, onMapClick, route, numbers, userPos, people, className, fitKey, interactive = true }: MapViewProps) {
+  // Kortet oprettes kun én gang, så klik-handlerne læses gennem en ref.
+  const cb = useRef({ onSelect, onMapClick });
+  cb.current = { onSelect, onMapClick };
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const tiles = useRef<L.TileLayer | null>(null);
@@ -62,7 +67,10 @@ export function MapView({ bars, now, selectedId, onSelect, route, numbers, userP
     if (interactive) L.control.zoom({ position: 'topright' }).addTo(m);
     layer.current = L.layerGroup().addTo(m);
     peopleLayer.current = L.layerGroup().addTo(m);
-    m.on('click', () => onSelect?.(null));
+    m.on('click', (e: L.LeafletMouseEvent) => {
+      if (cb.current.onMapClick) cb.current.onMapClick({ lat: e.latlng.lat, lng: e.latlng.lng });
+      else cb.current.onSelect?.(null);
+    });
     map.current = m;
     setTimeout(() => m.invalidateSize(), 60);
     return () => { m.remove(); map.current = null; markers.current.clear(); };

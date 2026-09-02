@@ -14,7 +14,7 @@ function greeting(now: Date, name: string): string {
 }
 
 export function Home({ now }: { now: Date }) {
-  const { state, pos, locate, locating, dispatch } = useStore();
+  const { state, pos, locate, locating, posError, dispatch } = useStore();
 
   const openNow = useMemo(
     () => BARS.filter((b) => barStatus(b, now).open).sort((a, b) => a.name.localeCompare(b.name, 'da')),
@@ -140,9 +140,13 @@ export function Home({ now }: { now: Date }) {
         ) : (
           <div className="card card--pad center">
             <p className="small muted">Slå lokation til for at se hvilke barer der er tættest på dig.</p>
-            <button className="btn btn--primary btn--sm" onClick={locate} disabled={locating}>
-              {locating ? 'Finder dig…' : '📍 Find min position'}
-            </button>
+            <div className="btnrow" style={{ justifyContent: 'center' }}>
+              <button className="btn btn--primary btn--sm" onClick={locate} disabled={locating}>
+                {locating ? 'Finder dig…' : '📍 Find min position'}
+              </button>
+              <button className="btn btn--sm" onClick={() => navigate('/kort?vaelg=1')}>✋ Sæt den selv</button>
+            </div>
+            {posError && <p className="tiny muted" style={{ margin: '8px 0 0' }}>{posError}</p>}
           </div>
         )}
       </section>

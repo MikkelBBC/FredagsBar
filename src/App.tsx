@@ -14,6 +14,7 @@ import { Profile } from './screens/Profile';
 import { SharedCrawl } from './screens/SharedCrawl';
 import { SessionScreen } from './screens/Session';
 import { JoinByCode } from './screens/JoinByCode';
+import { LiveBar } from './components/LiveBar';
 
 const TABS = [
   { path: '/', ico: '🍺', label: 'I dag' },
@@ -68,6 +69,8 @@ export function App() {
       </header>
 
       {screen}
+
+      <LiveBar hidden={head === 'live'} />
 
       <nav className="nav">
         <div className="nav__inner">

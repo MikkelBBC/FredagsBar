@@ -215,3 +215,22 @@ export function feedList(s: Session | null, limit = 40): FeedEvent[] {
 export function sessionUrl(code: string): string {
   return `${location.origin}${location.pathname}#/live/${code}`;
 }
+
+/* ---------------- aktiv session ---------------- */
+
+const ACTIVE_KEY = 'mfc200:active';
+
+/** Husker hvilken session man er med i, så man kan navigere rundt uden at miste den. */
+export function setActiveSession(code: string) {
+  try { localStorage.setItem(ACTIVE_KEY, code); } catch { /* privat tilstand */ }
+  window.dispatchEvent(new Event('mfc200:active'));
+}
+
+export function getActiveSession(): string | null {
+  try { return localStorage.getItem(ACTIVE_KEY); } catch { return null; }
+}
+
+export function clearActiveSession() {
+  try { localStorage.removeItem(ACTIVE_KEY); } catch { /* privat tilstand */ }
+  window.dispatchEvent(new Event('mfc200:active'));
+}

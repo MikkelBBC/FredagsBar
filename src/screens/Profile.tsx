@@ -26,7 +26,7 @@ const BADGES: Badge[] = [
 ];
 
 export function Profile({ now }: { now: Date }) {
-  const { state, dispatch, toast, pos, locate, locating } = useStore();
+  const { state, dispatch, toast, posSource, posError, accuracy, locate, locating } = useStore();
 
   const visitedIds = Object.keys(state.visited);
   const totalVisits = Object.values(state.visited).reduce((a, b) => a + b, 0);
@@ -66,9 +66,24 @@ export function Profile({ now }: { now: Date }) {
         </div>
         <div className="field">
           <label>Lokation</label>
-          <button className="btn btn--block" onClick={locate} disabled={locating}>
-            {pos ? '📍 Position aktiv – opdatér' : locating ? 'Finder dig…' : '📍 Slå lokation til'}
-          </button>
+          <div className="btnrow">
+            <button className="btn" onClick={locate} disabled={locating}>
+              {locating ? 'Finder dig…' : posSource === 'gps' ? '📍 GPS aktiv – opdatér' : '📍 Brug GPS'}
+            </button>
+            <button className="btn" onClick={() => navigate('/kort?vaelg=1')}>✋ Sæt på kortet</button>
+            {posSource === 'manuel' && (
+              <button className="btn btn--danger" onClick={() => { dispatch({ type: 'manualPos', pos: null }); toast('Manuel position fjernet'); }}>
+                Ryd manuel
+              </button>
+            )}
+          </div>
+          <span className="tiny muted">
+            {posSource === 'manuel'
+              ? '✋ Du har selv sat din position på kortet. Den bruges frem for GPS.'
+              : posSource === 'gps'
+                ? `📍 GPS aktiv${accuracy ? ` · ca. ±${accuracy} m` : ''}`
+                : posError || 'Bruges til afstande og "tættest på dig". Er GPS blokeret, kan du sætte den manuelt.'}
+          </span>
         </div>
       </div>
 

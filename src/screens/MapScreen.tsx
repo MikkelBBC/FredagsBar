@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BARS, BAR_BY_ID } from '../data/bars';
 import { barStatus } from '../lib/hours';
 import { fmtDistance, googleMapsDirections, walkMeters, walkMinutes } from '../lib/geo';
-import { navigate } from '../lib/router';
+import { navigate, useRoute } from '../lib/router';
 import { useStore } from '../lib/store';
 import { MapView } from '../components/MapView';
 import { AddToCrawlButton, FacChip, FavButton, StatusChip, logoUrl } from '../components/ui';
@@ -10,9 +10,11 @@ import { AddToCrawlButton, FacChip, FavButton, StatusChip, logoUrl } from '../co
 type Mode = 'alle' | 'aabne' | 'favoritter' | 'tur';
 
 export function MapScreen({ now, focus }: { now: Date; focus?: string }) {
-  const { state, pos, locate, locating, posError } = useStore();
+  const qs = useRoute().query;
+  const { state, dispatch, toast, pos, posSource, locate, locating, posError, accuracy } = useStore();
   const [mode, setMode] = useState<Mode>('alle');
   const [sel, setSel] = useState<string | null>(focus ?? null);
+  const [picking, setPicking] = useState(qs.get('vaelg') === '1');
 
   useEffect(() => { if (focus) setSel(focus); }, [focus]);
 
@@ -63,15 +65,49 @@ export function MapScreen({ now, focus }: { now: Date; focus?: string }) {
           now={now}
           selectedId={sel}
           onSelect={setSel}
+          onMapClick={picking ? (p) => {
+            dispatch({ type: 'manualPos', pos: p });
+            setPicking(false);
+            toast('Din position er sat – tryk igen for at flytte den');
+          } : undefined}
           numbers={numbers}
           route={route}
           userPos={pos}
           fitKey={mode + ':' + bars.length}
         />
 
-        <button className="mapfab" style={{ top: 12 }} onClick={locate} aria-label="Find mig" title="Find min position">
+        <button className="mapfab" style={{ top: 12 }} onClick={locate} aria-label="Find mig" title="Find min position med GPS">
           {locating ? '⏳' : '📍'}
         </button>
+
+        <button
+          className={'mapfab' + (picking ? ' mapfab--on' : '')}
+          style={{ top: 64 }}
+          onClick={() => { setPicking((v) => !v); setSel(null); }}
+          aria-label="Sæt position manuelt"
+          title="Sæt din position manuelt"
+        >
+          ✋
+        </button>
+
+        {picking && (
+          <div className="maptip center">
+            <b className="small">Tryk hvor du står</b>
+            <div className="tiny muted">Så bruger appen det som din position</div>
+          </div>
+        )}
+
+        {!picking && posSource === 'manuel' && (
+          <div className="maptip">
+            <div className="row row--between" style={{ gap: 8 }}>
+              <span className="tiny"><b>✋ Manuel position</b></span>
+              <button className="tiny" style={{ fontWeight: 800, color: 'var(--danger)' }} onClick={() => {
+                dispatch({ type: 'manualPos', pos: null });
+                toast('Manuel position fjernet');
+              }}>Ryd</button>
+            </div>
+          </div>
+        )}
 
         {bars.length === 0 && (
           <div className="mapsheet center">
@@ -81,9 +117,12 @@ export function MapScreen({ now, focus }: { now: Date; focus?: string }) {
           </div>
         )}
 
-        {posError && !pos && (
-          <div className="mapsheet" style={{ bottom: 'auto', top: 12, left: 66, right: 66, padding: 8 }}>
+        {posError && !pos && !picking && (
+          <div className="maptip">
             <span className="tiny muted">{posError}</span>
+            <button className="btn btn--sm btn--primary btn--block" style={{ marginTop: 8 }} onClick={() => setPicking(true)}>
+              ✋ Sæt din position i stedet
+            </button>
           </div>
         )}
 

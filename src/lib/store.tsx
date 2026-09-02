@@ -6,6 +6,8 @@ import type { LatLng } from './geo';
 
 export interface State {
   name: string;
+  /** Manuelt sat position, brugt hvis GPS er blokeret eller upålidelig */
+  manualPos: LatLng | null;
   theme: 'light' | 'dark' | 'system';
   favorites: string[];
   visited: Record<string, number>;
@@ -21,7 +23,7 @@ export function emptyDraft(): Crawl {
 }
 
 function load(): State {
-  const base: State = { name: '', theme: 'system', favorites: [], visited: {}, crawls: [], draft: emptyDraft(), toasts: [] };
+  const base: State = { name: '', manualPos: null, theme: 'system', favorites: [], visited: {}, crawls: [], draft: emptyDraft(), toasts: [] };
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return base;
@@ -34,6 +36,7 @@ function load(): State {
 
 export type Action =
   | { type: 'name'; name: string }
+  | { type: 'manualPos'; pos: LatLng | null }
   | { type: 'theme'; theme: State['theme'] }
   | { type: 'toggleFav'; id: string }
   | { type: 'visit'; id: string; delta: number }
@@ -54,6 +57,7 @@ let toastId = 0;
 function reducer(s: State, a: Action): State {
   switch (a.type) {
     case 'name': return { ...s, name: a.name };
+    case 'manualPos': return { ...s, manualPos: a.pos };
     case 'theme': return { ...s, theme: a.theme };
     case 'toggleFav': return { ...s, favorites: s.favorites.includes(a.id) ? s.favorites.filter((x) => x !== a.id) : [...s.favorites, a.id] };
     case 'visit': {
@@ -85,7 +89,7 @@ function reducer(s: State, a: Action): State {
     case 'deleteCrawl': return { ...s, crawls: s.crawls.filter((c) => c.id !== a.id) };
     case 'toast': return { ...s, toasts: [...s.toasts, { id: ++toastId, text: a.text }] };
     case 'untoast': return { ...s, toasts: s.toasts.filter((t) => t.id !== a.id) };
-    case 'reset': return { ...s, favorites: [], visited: {}, crawls: [], draft: emptyDraft(), name: '' };
+    case 'reset': return { ...s, favorites: [], visited: {}, crawls: [], draft: emptyDraft(), name: '', manualPos: null };
   }
 }
 
@@ -93,9 +97,13 @@ interface Ctx {
   state: State;
   dispatch: (a: Action) => void;
   toast: (text: string) => void;
+  /** Den position appen regner med: manuelt sat hvis der er en, ellers GPS. */
   pos: LatLng | null;
+  posSource: 'manuel' | 'gps' | null;
   posError: string | null;
   locating: boolean;
+  /** Unøjagtighed i meter på seneste position */
+  accuracy: number | null;
   locate: () => void;
 }
 
@@ -103,9 +111,10 @@ const StoreCtx = createContext<Ctx | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, load);
-  const [pos, setPos] = useState<LatLng | null>(null);
+  const [gpsPos, setPos] = useState<LatLng | null>(null);
   const [posError, setPosError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
   const watchRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -127,15 +136,61 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener('change', apply);
   }, [state.theme]);
 
+  /**
+   * GPS er langsom og upålidelig indendørs – især på mobil. Derfor:
+   * først et hurtigt bud med høj præcision, så et nyt forsøg uden hvis det
+   * timer ud, og til sidst en watch der holder positionen frisk.
+   */
   const locate = useCallback(() => {
     if (!navigator.geolocation) { setPosError('Din browser understøtter ikke lokation'); return; }
-    if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
     setLocating(true);
-    watchRef.current = navigator.geolocation.watchPosition(
-      (p) => { setPos({ lat: p.coords.latitude, lng: p.coords.longitude }); setPosError(null); setLocating(false); },
-      (e) => { setPosError(e.code === 1 ? 'Lokation er blokeret i browseren' : 'Kunne ikke finde din position'); setLocating(false); },
-      { enableHighAccuracy: true, maximumAge: 15000, timeout: 15000 },
+    setPosError(null);
+
+    const onOk = (p: GeolocationPosition) => {
+      setPos({ lat: p.coords.latitude, lng: p.coords.longitude });
+      setAccuracy(Math.round(p.coords.accuracy));
+      setPosError(null);
+      setLocating(false);
+    };
+
+    const startWatch = () => {
+      if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
+      watchRef.current = navigator.geolocation.watchPosition(
+        onOk,
+        () => { /* enkelte fejl i en watch er normale – vi beholder sidste kendte position */ },
+        { enableHighAccuracy: true, maximumAge: 20000, timeout: 45000 },
+      );
+    };
+
+    const onFail = (e: GeolocationPositionError) => {
+      if (e.code === e.PERMISSION_DENIED) {
+        setPosError('Lokation er blokeret – tillad det i browserens indstillinger og prøv igen');
+        setLocating(false);
+        return;
+      }
+      // Andet forsøg: uden høj præcision og med længere frist (virker typisk indendørs).
+      navigator.geolocation.getCurrentPosition(
+        (p) => { onOk(p); startWatch(); },
+        (e2) => {
+          setPosError(e2.code === e2.TIMEOUT
+            ? 'GPS svarer ikke lige nu – prøv igen, gerne tæt på et vindue eller udenfor'
+            : 'Kunne ikke finde din position');
+          setLocating(false);
+        },
+        { enableHighAccuracy: false, maximumAge: 120000, timeout: 30000 },
+      );
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      (p) => { onOk(p); startWatch(); },
+      onFail,
+      { enableHighAccuracy: true, maximumAge: 30000, timeout: 12000 },
     );
+  }, []);
+
+  // Stop med at følge positionen når appen lukkes.
+  useEffect(() => () => {
+    if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
   }, []);
 
   useEffect(() => {
@@ -155,7 +210,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [state.toasts]);
 
-  const value = useMemo(() => ({ state, dispatch, toast, pos, posError, locating, locate }), [state, toast, pos, posError, locating, locate]);
+  // Manuel position vinder over GPS – den har brugeren selv peget ud.
+  const pos = state.manualPos ?? gpsPos;
+  const posSource: 'manuel' | 'gps' | null = state.manualPos ? 'manuel' : gpsPos ? 'gps' : null;
+
+  const value = useMemo(
+    () => ({ state, dispatch, toast, pos, posSource, posError, locating, accuracy, locate }),
+    [state, toast, pos, posSource, posError, locating, accuracy, locate],
+  );
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }
 
