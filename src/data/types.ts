@@ -75,3 +75,46 @@ export interface Crawl {
   author?: string;
   createdAt: number;
 }
+
+/** ---------- Live-session ---------- */
+
+export interface Member {
+  id: string;
+  name: string;
+  emoji: string;
+  joinedAt: number;
+  lastSeen: number;
+  /** Antal registrerede genstande */
+  drinks: number;
+  /** Antal glas vand - giver ogsaa XP */
+  water: number;
+  xp: number;
+  /** Indeks paa det stop personen er ved (-1 = ikke ankommet) */
+  stop: number;
+  /** Gennemfoerte udfordringer */
+  done: string[];
+}
+
+export type FeedType = 'join' | 'drink' | 'water' | 'checkin' | 'challenge' | 'msg' | 'cheers';
+
+export interface FeedEvent {
+  id: string;
+  t: number;
+  type: FeedType;
+  memberId: string;
+  name: string;
+  emoji: string;
+  text?: string;
+  xp?: number;
+}
+
+export interface Session {
+  code: string;
+  crawl: Crawl;
+  hostId: string;
+  createdAt: number;
+  noAlcohol?: boolean;
+  wheel?: boolean;
+  members: Record<string, Member>;
+  feed: Record<string, FeedEvent>;
+}
