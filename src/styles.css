@@ -998,7 +998,7 @@ body:has(.livebar) .page { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 7
 /* ---------- fælles skål ---------- */
 
 .cheerscard {
-  border: 2px solid var(--accent);
+  border: 1px solid var(--border);
   border-radius: var(--r);
   background: var(--surface);
   padding: 14px;
@@ -1011,14 +1011,13 @@ body:has(.livebar) .page { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 7
   width: 100%;
   padding: 15px;
   border-radius: var(--r);
-  background: linear-gradient(140deg, var(--accent), var(--accent-2));
-  color: #291d07;
-  font-size: 19px;
+  background: linear-gradient(140deg, var(--brand), var(--brand-2));
+  color: var(--on-brand);
+  font-size: 18px;
   font-weight: 900;
   letter-spacing: .04em;
   margin-top: 10px;
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 45%, transparent);
-  animation: throb 1.6s ease-in-out infinite;
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--brand) 40%, transparent);
 }
 @keyframes throb { 50% { transform: scale(1.025); } }
 .cheers__btn:active { transform: scale(.97); }

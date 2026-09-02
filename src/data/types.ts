@@ -131,7 +131,7 @@ export interface Announce {
   id: string;
   t: number;
   /** Hvad der fejres */
-  kind: 'omgang' | 'skaal' | 'bingo';
+  kind: 'omgang' | 'skaal' | 'bingo' | 'kylling' | 'taber';
   memberId: string;
   name: string;
   emoji: string;

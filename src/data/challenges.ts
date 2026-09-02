@@ -280,17 +280,18 @@ export const BINGO_LINES: number[][] = [
 /* ---------------- niveauer ---------------- */
 
 /**
- * Balanceret så en hel aften kan nå toppen: tilmelding + 4 stop + et par
- * konsekvenser + skåle + en mission lander typisk på 400-550 point.
+ * Skruet så den øverste rang kan nås på én aften: fire stop med check-ind,
+ * hjulet på hver bar, et par skåle og en mission lander omkring 400-500 point.
+ * En rolig aften ender typisk som Fredagsbaron, en vild som Aarhus-legende.
  */
 export const LEVELS = [
   { xp: 0, title: 'Fadølsfærding', ico: '🌱' },
-  { xp: 40, title: 'Bajerlærling', ico: '🍺' },
-  { xp: 100, title: 'Fredagsven', ico: '🎒' },
-  { xp: 180, title: 'Barkending', ico: '🧭' },
-  { xp: 280, title: 'Fredagsbaron', ico: '🎩' },
-  { xp: 400, title: 'Skålmester', ico: '🏆' },
-  { xp: 550, title: 'Aarhus-legende', ico: '👑' },
+  { xp: 35, title: 'Bajerlærling', ico: '🍺' },
+  { xp: 85, title: 'Fredagsven', ico: '🎒' },
+  { xp: 150, title: 'Barkending', ico: '🧭' },
+  { xp: 230, title: 'Fredagsbaron', ico: '🎩' },
+  { xp: 320, title: 'Skålmester', ico: '🏆' },
+  { xp: 430, title: 'Aarhus-legende', ico: '👑' },
 ];
 
 export function levelFor(xp: number) {

@@ -5,6 +5,8 @@ const KIND: Record<Announce['kind'], { ico: string; head: string; color: string 
   omgang: { ico: '🍻', head: 'OMGANG!', color: 'var(--accent)' },
   skaal: { ico: '🥂', head: 'SKÅL!', color: '#7fd4a2' },
   bingo: { ico: '🔢', head: 'BINGO!', color: '#8ab4f8' },
+  kylling: { ico: '🐔', head: 'KYLLING!', color: '#e8a33d' },
+  taber: { ico: '😬', head: 'KÆMPE TABER!', color: '#e07a5f' },
 };
 
 /**

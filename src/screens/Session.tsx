@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BAR_BY_ID } from '../data/bars';
-import type { Bar, FeedEvent, Member, Session } from '../data/types';
+import type { Announce, Bar, FeedEvent, Member, Session } from '../data/types';
 import {
   BINGO_LINES, BINGO_TILES, CHALLENGES, MISSIONER, REGLER, shareAwards, teases,
   drawBingo, drawChallenges, levelFor, type Challenge, type MemberStats,
@@ -32,6 +32,28 @@ function ago(t: number, now: number): string {
   if (m < 60) return `${m} min`;
   return `${Math.round(m / 60)} t`;
 }
+
+/** Annonceringer i nutid – det er noget der sker lige nu, ikke noget der skete. */
+const TEKST_OMGANG = [
+  'giver en omgang til hele holdet! Sig pænt tak.',
+  'er i gavehumør og giver en omgang til jer alle sammen!',
+  'giver en omgang. Nogen skal jo være den voksne.',
+  'giver en omgang til holdet. Husk det næste gang I dømmer.',
+];
+
+const TEKST_KYLLING = [
+  'er en kæmpe kylling der ikke tør sin konsekvens – så nu giver han eller hun en omgang!',
+  'tør ikke sin konsekvens og køber sig fri med en omgang til jer alle sammen!',
+  'springer konsekvensen over som en sand kylling. Straffen er en omgang til holdet!',
+];
+
+const TEKST_TABER = [
+  'er en kæmpe taber der fejler sin hemmelige mission – så nu giver han eller hun en omgang!',
+  'kikser sin mission fuldstændig og giver derfor en omgang til jer andre!',
+  'klarer ikke sin mission. Straffen er en omgang til hele holdet!',
+];
+
+const vaelg = (liste: string[]) => liste[Math.floor(Math.random() * liste.length)];
 
 const FEED_ICO: Record<string, string> = {
   join: '👋', drink: '🍺', checkin: '📍', challenge: '🎯', msg: '💬', cheers: '🥂',
@@ -242,8 +264,8 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
   const addDrink = async () => {
     await live.setPath(code, `members/${me.id}/drinks`, (me.drinks || 0) + 1);
     await live.setPath(code, `members/${me.id}/xp`, me.xp + XP.drink);
-    await live.pushFeed(code, { t: Date.now(), type: 'drink', memberId: me.id, name: me.name, emoji: me.emoji, text: 'tog en genstand', xp: XP.drink });
-    toast(`Genstand registreret +${XP.drink} point`);
+    await live.pushFeed(code, { t: Date.now(), type: 'drink', memberId: me.id, name: me.name, emoji: me.emoji, text: 'tager en genstand', xp: XP.drink });
+    toast(`Genstand registreret · +${XP.drink} point`);
   };
 
   const checkIn = async (i: number) => {
@@ -265,13 +287,13 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
       await live.setPath(code, `rules/${i}`, regel.id);
       await live.pushFeed(code, {
         t: Date.now(), type: 'msg', memberId: me.id, name: me.name, emoji: me.emoji,
-        text: `trak regel på ${bar.name}: ${regel.ico} ${regel.title}`,
+        text: `trækker reglen på ${bar.name}: ${regel.ico} ${regel.title}`,
       });
     }
 
     await live.pushFeed(code, {
       t: Date.now(), type: 'checkin', memberId: me.id, name: me.name, emoji: me.emoji,
-      text: `er ankommet til ${bar.name}${first ? ' – først fremme! 🥇' : ''}${finale ? ' (finale, dobbelte point 🔥)' : ''}`,
+      text: `ankommer til ${bar.name}${first ? ' – først fremme! 🥇' : ''}${finale ? ' (finale, dobbelte point 🔥)' : ''}`,
       xp: gain,
     });
     toast(`Tjekket ind på ${bar.name} +${gain} point`);
@@ -293,7 +315,7 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
 
     // Nåede hele holdet med? Så er det en fejring værd – men uden ekstra point.
     if (already.length + 1 >= members.length && members.length > 1) {
-      await announce('skaal', '– og dermed skålede hele holdet sammen! 🥂');
+      await announce('skaal', '– og dermed skåler hele holdet sammen! 🥂');
     }
     toast(`SKÅL! +${XP.cheers} point`);
   };
@@ -311,11 +333,11 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
     await live.setPath(code, `members/${me.id}/spins/${stopKey}`, c.id);
     await live.pushFeed(code, {
       t: Date.now(), type: 'challenge', memberId: me.id, name: me.name, emoji: me.emoji,
-      text: `drejede hjulet: ${c.text}`,
+      text: `drejer hjulet: ${c.text}`,
     });
   };
 
-  const announce = async (kind: 'omgang' | 'skaal' | 'bingo', text: string) => {
+  const announce = async (kind: Announce['kind'], text: string) => {
     await live.setPath(code, 'announce', {
       id: newId(), t: Date.now(), kind, memberId: me.id, name: me.name, emoji: me.emoji, text,
     });
@@ -325,16 +347,16 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
    * Giver en omgang til hele holdet – kun giveren får point, men alle skal se det.
    * `grund` bruges når omgangen er en konsekvens, fx en mission man gav op på.
    */
-  const giveRound = async (grund?: { feed: string; fejring: string }) => {
+  const giveRound = async (grund?: { feed: string; fejring: string; kind: 'omgang' | 'kylling' | 'taber' }) => {
     if (!grund && !confirm(`Giver du en omgang til ${members.length === 1 ? 'holdet' : `alle ${members.length}`}? Det giver ${XP.round} point.`)) return;
     await live.setPath(code, `members/${me.id}/rounds`, (me.rounds || 0) + 1);
     await live.setPath(code, `members/${me.id}/xp`, me.xp + XP.round);
     await live.pushFeed(code, {
       t: Date.now(), type: 'drink', memberId: me.id, name: me.name, emoji: me.emoji,
-      text: grund?.feed ?? 'gav en omgang til hele holdet! 🍻', xp: XP.round,
+      text: grund?.feed ?? 'giver en omgang til hele holdet! 🍻', xp: XP.round,
     });
-    await announce('omgang', grund?.fejring ?? 'giver en omgang til hele holdet! Sig pænt tak.');
-    toast(`Omgang givet – +${XP.round} point 🍻`);
+    await announce(grund?.kind ?? 'omgang', grund?.fejring ?? vaelg(TEKST_OMGANG));
+    toast(`Du giver en omgang – +${XP.round} point 🍻`);
   };
 
   /** Tør man ikke konsekvensen, koster det en omgang til holdet. */
@@ -343,8 +365,9 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
     if (!confirm('Springer du konsekvensen over? Så giver du en omgang til holdet i stedet.')) return;
     await live.setPath(code, `members/${me.id}/bailed/${stopKey}`, true);
     await giveRound({
-      feed: `sprang konsekvensen over og giver en omgang: "${c.text}"`,
-      fejring: 'turde ikke konsekvensen – og giver en omgang i stedet!',
+      kind: 'kylling',
+      feed: `tør ikke konsekvensen og giver en omgang i stedet: "${c.text}"`,
+      fejring: vaelg(TEKST_KYLLING),
     });
   };
 
@@ -354,8 +377,9 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
     if (!confirm('Gav du op? Så skylder du holdet en omgang. Den giver til gengæld point.')) return;
     await live.setPath(code, `members/${me.id}/missionFailed`, true);
     await giveRound({
-      feed: 'klarede ikke sin hemmelige mission og giver en omgang! 🍻',
-      fejring: 'kiksede sin hemmelige mission – og giver en omgang som straf!',
+      kind: 'taber',
+      feed: 'fejler sin hemmelige mission og giver en omgang! 🍻',
+      fejring: vaelg(TEKST_TABER),
     });
   };
 
@@ -364,7 +388,7 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
     await live.setPath(code, 'endedAt', Date.now());
     await live.pushFeed(code, {
       t: Date.now(), type: 'msg', memberId: me.id, name: me.name, emoji: me.emoji,
-      text: 'afsluttede aftenen 🏁',
+      text: 'afslutter aftenen 🏁',
     });
   };
 
@@ -375,7 +399,7 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
     await live.setPath(code, `members/${me.id}/done`, [...(me.done || []), c.id]);
     await live.pushFeed(code, {
       t: Date.now(), type: 'challenge', memberId: me.id, name: me.name, emoji: me.emoji,
-      text: `klarede konsekvensen: ${c.text}`, xp: c.points,
+      text: `klarer konsekvensen: ${c.text}`, xp: c.points,
     });
     toast(`Godkendt! +${c.points} point`);
   };
@@ -386,7 +410,7 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
     await live.setPath(code, `members/${me.id}/xp`, me.xp + myMission.points);
     await live.pushFeed(code, {
       t: Date.now(), type: 'challenge', memberId: me.id, name: me.name, emoji: me.emoji,
-      text: `fuldførte sin hemmelige mission: ${myMission.text}`, xp: myMission.points,
+      text: `fuldfører sin hemmelige mission: ${myMission.text}`, xp: myMission.points,
     });
     toast(`Mission fuldført! +${myMission.points} point`);
   };
@@ -404,7 +428,7 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
       await live.setPath(code, `members/${me.id}/xp`, me.xp + xp);
       await live.pushFeed(code, {
         t: Date.now(), type: 'challenge', memberId: me.id, name: me.name, emoji: me.emoji,
-        text: `har BINGO! ${lines} ${lines === 1 ? 'række' : 'rækker'} 🔢`, xp,
+        text: `får BINGO! ${lines} ${lines === 1 ? 'række' : 'rækker'} 🔢`, xp,
       });
       toast(`BINGO! +${xp} point`);
     }
@@ -541,11 +565,11 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
               {me.missionDone ? (
                 <div className="chip chip--open" style={{ marginTop: 10 }}>✓ Fuldført</div>
               ) : me.missionFailed ? (
-                <div className="chip chip--warn" style={{ marginTop: 10 }}>🍻 Du gav op – og gav en omgang</div>
+                <div className="chip chip--warn" style={{ marginTop: 10 }}>🍻 Du giver en omgang for missionen</div>
               ) : (
                 <div className="btnrow" style={{ marginTop: 10 }}>
                   <button className="btn btn--sm btn--primary" onClick={completeMission}>✓ Jeg klarede den</button>
-                  <button className="btn btn--sm" onClick={failMission}>🍻 Jeg gav op – giv en omgang</button>
+                  <button className="btn btn--sm" onClick={failMission}>🍻 Jeg giver op – giv en omgang</button>
                 </div>
               )}
             </div>
@@ -793,7 +817,7 @@ function WheelTab({ bar, done, spun, spunId, bailed, onSpin, onComplete, onBail 
           {gennemfoert ? (
             <div className="chip chip--open" style={{ marginTop: 12 }}>✓ Gennemført</div>
           ) : bailed ? (
-            <div className="chip chip--warn" style={{ marginTop: 12 }}>🍻 Sprunget over – du gav en omgang</div>
+            <div className="chip chip--warn" style={{ marginTop: 12 }}>🍻 Sprunget over – du giver en omgang i stedet</div>
           ) : (
             <div className="btnrow" style={{ marginTop: 12 }}>
               <button className="btn btn--primary" onClick={() => onComplete(vist)}>✓ Gennemført</button>
@@ -902,7 +926,7 @@ function CheersCard({ session, joined, total, iJoined, onJoin }: {
       <div className="small muted" style={{ marginTop: 4 }}>
         {joined > 0
           ? `${joined} af ${total} har skålet i denne runde`
-          : 'Ny runde hvert 10. minut – er alle med, får hele holdet bonus'}
+          : 'Ny runde hvert 10. minut. Tryk når I skåler – kun du får point for din egen'}
       </div>
       <button className="cheers__btn" onClick={onJoin}>SKÅL! 🥂</button>
       <div className="tiny muted" style={{ marginTop: 8 }}>Næste runde om {mm}:{String(ss).padStart(2, '0')}</div>
