@@ -1,4 +1,4 @@
-import type { Crawl, FeedEvent, Member, Session } from '../data/types';
+import type { Crawl, FeedEvent, GameModes, Member, Session } from '../data/types';
 import { FIREBASE_CONFIG, firebaseReady } from './firebaseConfig';
 import { newId } from './share';
 
@@ -28,14 +28,16 @@ export function newSessionCode(): string {
   return s;
 }
 
-export function newSession(crawl: Crawl, hostId: string, opts: { noAlcohol?: boolean; wheel?: boolean } = {}): Session {
+export const DEFAULT_MODES: GameModes = { wheel: true, rules: true, missions: true, bingo: false, finale: true };
+
+export function newSession(crawl: Crawl, hostId: string, modes: Partial<GameModes> = {}): Session {
   return {
     code: newSessionCode(),
     crawl,
     hostId,
     createdAt: Date.now(),
-    noAlcohol: opts.noAlcohol ?? false,
-    wheel: opts.wheel ?? true,
+    modes: { ...DEFAULT_MODES, ...modes },
+    rules: {},
     members: {},
     feed: {},
   };
@@ -192,9 +194,12 @@ export const liveIsShared = () => live.backend === 'firebase';
 export const XP = {
   join: 10,
   checkin: 25,
+  /** Bonus til den foerste der tjekker ind paa et stop */
+  first: 15,
   drink: 5,
   water: 8,
   cheers: 5,
+  bingoLine: 75,
 } as const;
 
 export function memberList(s: Session | null): Member[] {

@@ -93,6 +93,14 @@ export interface Member {
   stop: number;
   /** Gennemfoerte udfordringer */
   done: string[];
+  /** Hemmelig mission (id fra MISSIONER) */
+  mission?: string;
+  missionDone?: boolean;
+  /** Bingoplade: 9 indeks i BINGO_TILES */
+  bingo?: number[];
+  /** Krydsede felter (0-8) */
+  bingoMarks?: number[];
+  bingoLines?: number;
 }
 
 export type FeedType = 'join' | 'drink' | 'water' | 'checkin' | 'challenge' | 'msg' | 'cheers';
@@ -108,13 +116,27 @@ export interface FeedEvent {
   xp?: number;
 }
 
+export interface GameModes {
+  /** Lykkehjul med konsekvenser */
+  wheel: boolean;
+  /** Regelmester: en faelles regel pr. stop */
+  rules: boolean;
+  /** Hemmelige missioner pr. deltager */
+  missions: boolean;
+  /** Bingoplade pr. deltager */
+  bingo: boolean;
+  /** Dobbelt XP paa sidste stop */
+  finale: boolean;
+}
+
 export interface Session {
   code: string;
   crawl: Crawl;
   hostId: string;
   createdAt: number;
-  noAlcohol?: boolean;
-  wheel?: boolean;
+  modes: GameModes;
+  /** Regel trukket for hvert stop: stopIndeks -> regel-id */
+  rules?: Record<string, string>;
   members: Record<string, Member>;
   feed: Record<string, FeedEvent>;
 }

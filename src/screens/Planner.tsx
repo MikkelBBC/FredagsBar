@@ -6,11 +6,20 @@ import { fmtDateLong, fmtMinutes, fmtTime, addMinutes } from '../lib/format';
 import { fetchWalkingRoute, fmtDistance, optimizeOrder, walkMeters, walkMinutes, type LatLng } from '../lib/geo';
 import { buildTimeline, crawlAsIcs, crawlAsText, downloadFile } from '../lib/crawl';
 import { copyText, nativeShare, shareUrl } from '../lib/share';
-import { live, liveIsShared, newSession } from '../lib/live';
+import { DEFAULT_MODES, live, liveIsShared, newSession } from '../lib/live';
+import type { GameModes } from '../data/types';
 import { navigate } from '../lib/router';
 import { useStore } from '../lib/store';
 import { MapView } from '../components/MapView';
 import { Empty, logoUrl } from '../components/ui';
+
+const MODE_LIST: { key: keyof GameModes; ico: string; title: string; text: string }[] = [
+  { key: 'wheel', ico: '🎡', title: 'Konsekvenshjul', text: 'Drej ved hver bar – hjulet giver en konsekvens. Jo sjældnere felt, jo flere XP.' },
+  { key: 'rules', ico: '👑', title: 'Regelmester', text: 'Den første der tjekker ind trækker en regel der gælder alle på det stop.' },
+  { key: 'missions', ico: '🕵️', title: 'Hemmelige missioner', text: 'Alle får en mission kun de selv kan se. Klarer du den i smug, giver det stort.' },
+  { key: 'bingo', ico: '🔢', title: 'Bingoplade', text: 'Hver deltager får en 3x3-plade med ting der sker i løbet af aftenen.' },
+  { key: 'finale', ico: '🔥', title: 'Finale', text: 'Sidste stop giver dobbelt XP – så stillingen kan væltes til sidst.' },
+];
 
 export function Planner({ now }: { now: Date }) {
   const { state, dispatch, toast, pos, locate } = useStore();
@@ -19,8 +28,7 @@ export function Planner({ now }: { now: Date }) {
   const [routeCoords, setRouteCoords] = useState<[number, number][] | null>(null);
   const [legs, setLegs] = useState<{ meters: number; seconds: number }[] | null>(null);
   const [routing, setRouting] = useState(false);
-  const [noAlcohol, setNoAlcohol] = useState(false);
-  const [wheelOn, setWheelOn] = useState(true);
+  const [modes, setModes] = useState<GameModes>(DEFAULT_MODES);
   const [starting, setStarting] = useState(false);
 
   const stopBars = draft.stops.map((s) => BAR_BY_ID[s.barId]).filter(Boolean) as Bar[];
@@ -84,7 +92,7 @@ export function Planner({ now }: { now: Date }) {
   const startSession = async () => {
     if (!draft.stops.length) { toast('Tilføj mindst ét stop først'); return; }
     setStarting(true);
-    const s = newSession({ ...draft, author: draft.author || state.name }, 'host', { noAlcohol, wheel: wheelOn });
+    const s = newSession({ ...draft, author: draft.author || state.name }, 'host', modes);
     await live.create(s);
     setStarting(false);
     navigate('/live/' + s.code);
@@ -229,17 +237,25 @@ export function Planner({ now }: { now: Date }) {
             <div>
               <h3>🎉 Start fredagsspillet</h3>
               <p className="small muted" style={{ margin: '4px 0 0' }}>
-                Alle får ét link, melder sig ind med navn og figur, og så kører der en live-stilling med XP,
-                genstande og udfordringer fra lykkehjulet.
+                Alle får ét link, melder sig ind med navn og figur, og så kører der en live-stilling
+                med XP, genstande og konsekvenser. Vælg hvilke spil der er med i aften.
               </p>
             </div>
-            <div className="row row--wrap" style={{ gap: 8 }}>
-              <button className={'fchip' + (wheelOn ? ' is-on' : '')} onClick={() => setWheelOn((v) => !v)}>
-                🎡 Lykkehjul {wheelOn ? 'til' : 'fra'}
-              </button>
-              <button className={'fchip' + (noAlcohol ? ' is-on' : '')} onClick={() => setNoAlcohol((v) => !v)}>
-                🚫🍻 Uden alkohol-udfordringer
-              </button>
+            <div className="stack" style={{ gap: 8 }}>
+              {MODE_LIST.map((m) => (
+                <button
+                  key={m.key}
+                  className={'modecard' + (modes[m.key] ? ' is-on' : '')}
+                  onClick={() => setModes((v) => ({ ...v, [m.key]: !v[m.key] }))}
+                >
+                  <span className="modecard__ico">{m.ico}</span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <b style={{ display: 'block', fontSize: 14 }}>{m.title}</b>
+                    <span className="tiny muted">{m.text}</span>
+                  </span>
+                  <span className="modecard__box">✓</span>
+                </button>
+              ))}
             </div>
             <button className="btn btn--accent btn--block" onClick={startSession} disabled={starting}>
               {starting ? 'Starter…' : '🎮 Start live-session'}

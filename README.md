@@ -29,7 +29,7 @@ Der ligger en workflow i `.github/workflows/deploy.yml`. Første gang:
 | **Barer** | Søgning, filtre på fakultet og område, sortering efter afstand eller åbningstid |
 | **Bar** | Åbningsdatoer, om baren, sociale links, rute i Google Maps, dine besøg |
 | **Tur** | Stop, rækkefølge, opholdstid, rigtig gårute, advarsler om åbningstider, delelink, `.ics` |
-| **Live** | Session med kode: tilmelding, XP, stilling, genstande, lykkehjul, feed |
+| **Live** | Session med kode: tilmelding, XP, stilling, genstande, konsekvenshjul, regelmester, hemmelige missioner, bingo, feed |
 | **Mig** | Navn, tema, statistik, badges, favoritter, gemte ture |
 
 ## Live-sessioner: slå deling til
@@ -63,8 +63,14 @@ noget følsomt i en session.
 ## Data
 
 Barerne ligger i [`src/data/bars.ts`](src/data/bars.ts) med adresse, koordinater, fakultet,
-beskrivelse og alle åbningsdatoer for semesteret. Udfordringerne til lykkehjulet ligger i
-[`src/data/challenges.ts`](src/data/challenges.ts).
+beskrivelse og alle åbningsdatoer for semesteret.
+
+Spilindholdet ligger i [`src/data/challenges.ts`](src/data/challenges.ts): konsekvenser til
+hjulet, regler til regelmesteren, hemmelige missioner og bingofelter. Konsekvenserne er
+skrevet om fra de lister der findes i forvejen på nettet — [godekonsekvensertil.com](https://godekonsekvensertil.com/),
+[woman.dk's 70 spørgsmål og konsekvenser](https://woman.dk/underholdning/sandhed-eller-konsekvens),
+[hyg.dk](https://hyg.dk/sandhed-eller-konsekvens/) — og reglerne kommer fra Vandfald/Kongespil
+([shareboks.dk](https://shareboks.dk/drukspil/)). De frække, klamme og farlige er sorteret fra.
 
 Åbningstiderne er tastet manuelt ind fra barernes egne opslag – tjek altid barens kanaler
 før I går. Logoerne i `public/logos/` tilhører de enkelte barer.
