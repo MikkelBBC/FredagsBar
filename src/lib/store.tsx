@@ -8,6 +8,8 @@ export interface State {
   name: string;
   /** Manuelt sat position, brugt hvis GPS er blokeret eller upålidelig */
   manualPos: LatLng | null;
+  /** Live-ture man har været med i, nyeste først */
+  recent: { code: string; title: string; at: number }[];
   theme: 'light' | 'dark' | 'system';
   favorites: string[];
   visited: Record<string, number>;
@@ -23,12 +25,12 @@ export function emptyDraft(): Crawl {
 }
 
 function load(): State {
-  const base: State = { name: '', manualPos: null, theme: 'system', favorites: [], visited: {}, crawls: [], draft: emptyDraft(), toasts: [] };
+  const base: State = { name: '', manualPos: null, recent: [], theme: 'system', favorites: [], visited: {}, crawls: [], draft: emptyDraft(), toasts: [] };
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return base;
     const parsed = JSON.parse(raw);
-    return { ...base, ...parsed, toasts: [], draft: parsed.draft || base.draft };
+    return { ...base, ...parsed, toasts: [], recent: parsed.recent || [], draft: parsed.draft || base.draft };
   } catch {
     return base;
   }
@@ -37,6 +39,8 @@ function load(): State {
 export type Action =
   | { type: 'name'; name: string }
   | { type: 'manualPos'; pos: LatLng | null }
+  | { type: 'rememberSession'; code: string; title: string }
+  | { type: 'forgetSession'; code: string }
   | { type: 'theme'; theme: State['theme'] }
   | { type: 'toggleFav'; id: string }
   | { type: 'visit'; id: string; delta: number }
@@ -48,7 +52,7 @@ export type Action =
   | { type: 'draftReset' }
   | { type: 'saveCrawl'; crawl: Crawl }
   | { type: 'deleteCrawl'; id: string }
-  | { type: 'toast'; text: string }
+  | { type: 'toast'; id: number; text: string }
   | { type: 'untoast'; id: number }
   | { type: 'reset' };
 
@@ -58,6 +62,11 @@ function reducer(s: State, a: Action): State {
   switch (a.type) {
     case 'name': return { ...s, name: a.name };
     case 'manualPos': return { ...s, manualPos: a.pos };
+    case 'rememberSession': {
+      const rest = (s.recent || []).filter((r) => r.code !== a.code);
+      return { ...s, recent: [{ code: a.code, title: a.title, at: Date.now() }, ...rest].slice(0, 10) };
+    }
+    case 'forgetSession': return { ...s, recent: (s.recent || []).filter((r) => r.code !== a.code) };
     case 'theme': return { ...s, theme: a.theme };
     case 'toggleFav': return { ...s, favorites: s.favorites.includes(a.id) ? s.favorites.filter((x) => x !== a.id) : [...s.favorites, a.id] };
     case 'visit': {
@@ -87,9 +96,17 @@ function reducer(s: State, a: Action): State {
       return { ...s, crawls };
     }
     case 'deleteCrawl': return { ...s, crawls: s.crawls.filter((c) => c.id !== a.id) };
-    case 'toast': return { ...s, toasts: [...s.toasts, { id: ++toastId, text: a.text }] };
+    case 'toast': {
+      const last = s.toasts[s.toasts.length - 1];
+      // Samme besked igen? Tæl op i stedet for at stable dem oven på hinanden.
+      if (last && last.text.replace(/ ×\d+$/, '') === a.text) {
+        const n = Number(last.text.match(/ ×(\d+)$/)?.[1] ?? 1) + 1;
+        return { ...s, toasts: [...s.toasts.slice(0, -1), { id: last.id, text: `${a.text} ×${n}` }] };
+      }
+      return { ...s, toasts: [...s.toasts, { id: a.id, text: a.text }].slice(-3) };
+    }
     case 'untoast': return { ...s, toasts: s.toasts.filter((t) => t.id !== a.id) };
-    case 'reset': return { ...s, favorites: [], visited: {}, crawls: [], draft: emptyDraft(), name: '', manualPos: null };
+    case 'reset': return { ...s, favorites: [], visited: {}, crawls: [], draft: emptyDraft(), name: '', manualPos: null, recent: [] };
   }
 }
 
@@ -202,13 +219,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [locate]);
 
-  const toast = useCallback((text: string) => dispatch({ type: 'toast', text }), []);
-
-  useEffect(() => {
-    if (!state.toasts.length) return;
-    const t = setTimeout(() => dispatch({ type: 'untoast', id: state.toasts[0].id }), 2600);
-    return () => clearTimeout(t);
-  }, [state.toasts]);
+  // Hver toast har sin egen nedtælling, så en ny besked ikke forlænger de andre.
+  const toast = useCallback((text: string) => {
+    const id = ++toastId;
+    dispatch({ type: 'toast', id, text });
+    setTimeout(() => dispatch({ type: 'untoast', id }), 2600);
+  }, []);
 
   // Manuel position vinder over GPS – den har brugeren selv peget ud.
   const pos = state.manualPos ?? gpsPos;

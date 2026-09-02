@@ -2,10 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BAR_BY_ID } from '../data/bars';
 import type { Bar, FeedEvent, Member, Session } from '../data/types';
 import {
-  BINGO_LINES, BINGO_TILES, MISSIONER, REGLER,
-  drawBingo, drawChallenges, levelFor, type Challenge,
+  BINGO_LINES, BINGO_TILES, CHALLENGES, MISSIONER, REGLER, shareAwards, teases,
+  drawBingo, drawChallenges, levelFor, type Challenge, type MemberStats,
 } from '../data/challenges';
-import { XP, clearActiveSession, feedList, live, liveIsShared, memberList, newMember, sessionUrl, setActiveSession } from '../lib/live';
+import {
+  XP, cheersJoined, cheersRound, clearActiveSession, feedList, live, liveIsShared,
+  memberList, msToNextCheers, newMember, sessionEnded, sessionUrl, setActiveSession,
+} from '../lib/live';
 import { buildTimeline } from '../lib/crawl';
 import { fmtDateLong, fmtTime } from '../lib/format';
 import { copyText, nativeShare } from '../lib/share';
@@ -15,6 +18,8 @@ import { useStore } from '../lib/store';
 import { MapView } from '../components/MapView';
 import { Wheel, ChallengeCard } from '../components/Wheel';
 import { Empty, logoUrl } from '../components/ui';
+import { Celebration } from '../components/Celebration';
+import { newId } from '../lib/share';
 
 const EMOJIS = ['🍺', '🦊', '🐙', '🦁', '🐸', '🦖', '🐝', '🦄', '👽', '🤖', '🎩', '🌮', '⚡', '🔥', '🍕', '🐳'];
 
@@ -29,7 +34,7 @@ function ago(t: number, now: number): string {
 }
 
 const FEED_ICO: Record<string, string> = {
-  join: '👋', drink: '🍺', water: '💧', checkin: '📍', challenge: '🎯', msg: '💬', cheers: '🥂',
+  join: '👋', drink: '🍺', checkin: '📍', challenge: '🎯', msg: '💬', cheers: '🥂',
 };
 
 export function SessionScreen({ code, now }: { code: string; now: Date }) {
@@ -63,10 +68,12 @@ export function SessionScreen({ code, now }: { code: string; now: Date }) {
     if (session.modes?.bingo) { m.bingo = drawBingo(); m.bingoMarks = []; m.bingoLines = 0; }
     await live.setPath(code, `members/${m.id}`, m);
     await live.pushFeed(code, { t: Date.now(), type: 'join', memberId: m.id, name: m.name, emoji: m.emoji, xp: XP.join });
+    if (!session.hostId || session.hostId === 'host') await live.setPath(code, 'hostId', m.id);
     localStorage.setItem(meKey(code), m.id);
     setMyId(m.id);
+    dispatch({ type: 'rememberSession', code, title: session.crawl.title });
     if (!state.name) dispatch({ type: 'name', name: m.name });
-    toast(`Velkommen, ${m.name}! +${XP.join} XP`);
+    toast(`Velkommen, ${m.name}! +${XP.join} point`);
   }, [code, dispatch, session, state.name, toast]);
 
   if (session === undefined) {
@@ -87,6 +94,8 @@ export function SessionScreen({ code, now }: { code: string; now: Date }) {
       </main>
     );
   }
+
+  if (sessionEnded(session, now.getTime())) return <Finale session={session} meId={myId} />;
 
   if (!me) return <JoinCard session={session} onJoin={join} defaultName={state.name} />;
 
@@ -143,7 +152,7 @@ function JoinCard({ session, onJoin, defaultName }: { session: Session; onJoin: 
           {modes.rules && <span className="chip">👑 Regelmester</span>}
           {modes.missions && <span className="chip">🕵️ Hemmelig mission</span>}
           {modes.bingo && <span className="chip">🔢 Bingo</span>}
-          {modes.finale && <span className="chip">🔥 Dobbelt XP på sidste stop</span>}
+          {modes.finale && <span className="chip">🔥 Dobbelte point på sidste stop</span>}
         </div>
       </div>
 
@@ -230,11 +239,11 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
 
   const sharingCount = members.filter((m) => typeof m.lat === 'number').length;
 
-  const bump = async (field: 'drinks' | 'water', xp: number, type: 'drink' | 'water', text: string) => {
-    await live.setPath(code, `members/${me.id}/${field}`, (me[field] || 0) + 1);
-    await live.setPath(code, `members/${me.id}/xp`, me.xp + xp);
-    await live.pushFeed(code, { t: Date.now(), type, memberId: me.id, name: me.name, emoji: me.emoji, text, xp });
-    toast(`${text} +${xp} XP`);
+  const addDrink = async () => {
+    await live.setPath(code, `members/${me.id}/drinks`, (me.drinks || 0) + 1);
+    await live.setPath(code, `members/${me.id}/xp`, me.xp + XP.drink);
+    await live.pushFeed(code, { t: Date.now(), type: 'drink', memberId: me.id, name: me.name, emoji: me.emoji, text: 'tog en genstand', xp: XP.drink });
+    toast(`Genstand registreret +${XP.drink} point`);
   };
 
   const checkIn = async (i: number) => {
@@ -262,18 +271,79 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
 
     await live.pushFeed(code, {
       t: Date.now(), type: 'checkin', memberId: me.id, name: me.name, emoji: me.emoji,
-      text: `er ankommet til ${bar.name}${first ? ' – først fremme! 🥇' : ''}${finale ? ' (finale, dobbelt XP 🔥)' : ''}`,
+      text: `er ankommet til ${bar.name}${first ? ' – først fremme! 🥇' : ''}${finale ? ' (finale, dobbelte point 🔥)' : ''}`,
       xp: gain,
     });
-    toast(`Tjekket ind på ${bar.name} +${gain} XP`);
-    setTab('live');
+    toast(`Tjekket ind på ${bar.name} +${gain} point`);
+    setTab(modes.wheel ? 'hjul' : 'live');
   };
 
-  const cheers = async () => {
+  /** Med i rundens fælles skål. Kun den der trykker får point. */
+  const joinCheers = async () => {
+    const r = cheersRound(session, Date.now());
+    const already = cheersJoined(session, r);
+    if (already.includes(me.id)) return;
+
+    await live.setPath(code, `cheers/${r}/${me.id}`, Date.now());
     await live.setPath(code, `members/${me.id}/xp`, me.xp + XP.cheers);
-    await live.pushFeed(code, { t: Date.now(), type: 'cheers', memberId: me.id, name: me.name, emoji: me.emoji, text: 'skåler med hele holdet!', xp: XP.cheers });
-    toast('SKÅL! 🥂');
+    await live.pushFeed(code, {
+      t: Date.now(), type: 'cheers', memberId: me.id, name: me.name, emoji: me.emoji,
+      text: 'er med i den fælles skål', xp: XP.cheers,
+    });
+
+    // Nåede hele holdet med? Så er det en fejring værd – men uden ekstra point.
+    if (already.length + 1 >= members.length && members.length > 1) {
+      await announce('skaal', '– og dermed skålede hele holdet sammen! 🥂');
+    }
+    toast(`SKÅL! +${XP.cheers} point`);
   };
+
+  const round = cheersRound(session, Date.now());
+  const myCheers = Object.values(session.cheers || {}).filter((r) => r && r[me.id]).length;
+
+  // Alle skal dreje hjulet én gang på hver bar de tjekker ind på.
+  const stopKey = String(me.stop);
+  const spunId = me.stop >= 0 ? me.spins?.[stopKey] : undefined;
+  const mustSpin = modes.wheel && me.stop >= 0 && !spunId;
+
+  const recordSpin = async (c: Challenge) => {
+    if (me.stop < 0) return;
+    await live.setPath(code, `members/${me.id}/spins/${stopKey}`, c.id);
+    await live.pushFeed(code, {
+      t: Date.now(), type: 'challenge', memberId: me.id, name: me.name, emoji: me.emoji,
+      text: `drejede hjulet: ${c.text}`,
+    });
+  };
+
+  const announce = async (kind: 'omgang' | 'skaal' | 'bingo', text: string) => {
+    await live.setPath(code, 'announce', {
+      id: newId(), t: Date.now(), kind, memberId: me.id, name: me.name, emoji: me.emoji, text,
+    });
+  };
+
+  /** Giver en omgang til hele holdet – kun giveren får point, men alle skal se det. */
+  const giveRound = async () => {
+    if (!confirm(`Giver du en omgang til ${members.length === 1 ? 'holdet' : `alle ${members.length}`}? Det giver ${XP.round} point.`)) return;
+    await live.setPath(code, `members/${me.id}/rounds`, (me.rounds || 0) + 1);
+    await live.setPath(code, `members/${me.id}/xp`, me.xp + XP.round);
+    await live.pushFeed(code, {
+      t: Date.now(), type: 'drink', memberId: me.id, name: me.name, emoji: me.emoji,
+      text: 'gav en omgang til hele holdet! 🍻', xp: XP.round,
+    });
+    await announce('omgang', 'giver en omgang til hele holdet! Sig pænt tak.');
+    toast(`Du gav en omgang – +${XP.round} point 🍻`);
+  };
+
+  const endNight = async () => {
+    if (!confirm('Afslut aftenen for alle? Så låses stillingen og resultatet vises.')) return;
+    await live.setPath(code, 'endedAt', Date.now());
+    await live.pushFeed(code, {
+      t: Date.now(), type: 'msg', memberId: me.id, name: me.name, emoji: me.emoji,
+      text: 'afsluttede aftenen 🏁',
+    });
+  };
+
+  const isHost = session.hostId === me.id;
 
   const completeChallenge = async (c: Challenge) => {
     await live.setPath(code, `members/${me.id}/xp`, me.xp + c.points);
@@ -282,7 +352,7 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
       t: Date.now(), type: 'challenge', memberId: me.id, name: me.name, emoji: me.emoji,
       text: `klarede konsekvensen: ${c.text}`, xp: c.points,
     });
-    toast(`Godkendt! +${c.points} XP`);
+    toast(`Godkendt! +${c.points} point`);
   };
 
   const completeMission = async () => {
@@ -293,7 +363,7 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
       t: Date.now(), type: 'challenge', memberId: me.id, name: me.name, emoji: me.emoji,
       text: `fuldførte sin hemmelige mission: ${myMission.text}`, xp: myMission.points,
     });
-    toast(`Mission fuldført! +${myMission.points} XP`);
+    toast(`Mission fuldført! +${myMission.points} point`);
   };
 
   const toggleBingo = async (i: number) => {
@@ -311,7 +381,7 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
         t: Date.now(), type: 'challenge', memberId: me.id, name: me.name, emoji: me.emoji,
         text: `har BINGO! ${lines} ${lines === 1 ? 'række' : 'rækker'} 🔢`, xp,
       });
-      toast(`BINGO! +${xp} XP`);
+      toast(`BINGO! +${xp} point`);
     }
   };
 
@@ -343,7 +413,7 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="row row--between">
               <b className="small">{lvl.title}</b>
-              <span className="tiny" style={{ opacity: .85 }}>{me.xp} XP{lvl.next ? ` / ${lvl.next.xp}` : ''}</span>
+              <span className="tiny" style={{ opacity: .85 }}>{me.xp} point{lvl.next ? ` / ${lvl.next.xp}` : ''}</span>
             </div>
             <div className="xpbar" style={{ marginTop: 5 }}><div style={{ width: lvl.pct + '%' }} /></div>
           </div>
@@ -359,6 +429,25 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
 
       {tab === 'live' && (
         <>
+          {mustSpin && (
+            <button className="mustspin" onClick={() => setTab('hjul')}>
+              <span style={{ fontSize: 26 }}>🎡</span>
+              <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                <b style={{ display: 'block' }}>Du mangler at dreje hjulet</b>
+                <span className="tiny">Alle drejer én gang på hver bar – du kan ikke rulle om</span>
+              </span>
+              <span className="btn btn--sm btn--accent">Drej</span>
+            </button>
+          )}
+
+          <CheersCard
+            session={session}
+            joined={cheersJoined(session, round).length}
+            total={members.length}
+            iJoined={cheersJoined(session, round).includes(me.id)}
+            onJoin={joinCheers}
+          />
+
           {/* Hvor er jeg, og hvor langt er der videre */}
           <div className="card card--pad">
             <div className="row row--between" style={{ marginBottom: 10 }}>
@@ -389,17 +478,17 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
               </div>
             )}
 
-            <div className="btnrow">
-              <button className="btn btn--accent" onClick={() => bump('drinks', XP.drink, 'drink', 'tog en genstand')}>🍺 +1 genstand</button>
-              <button className="btn" onClick={() => bump('water', XP.water, 'water', 'drak et glas vand')}>💧 +1 vand</button>
-              <button className="btn" onClick={cheers}>🥂 Skål!</button>
+            <button className="bigbtn" onClick={giveRound}>🍻 GIV EN OMGANG</button>
+
+            <div className="btnrow" style={{ marginTop: 10 }}>
+              <button className="btn" onClick={addDrink}>🍺 +1 genstand</button>
               <button className="btn btn--primary" onClick={() => setTab('rute')}>📍 Tjek ind</button>
             </div>
 
             <div className="summary" style={{ marginTop: 12 }}>
               <div className="bigstat"><b>{me.drinks}</b><span>genstande</span></div>
-              <div className="bigstat"><b>{me.water}</b><span>vand</span></div>
               <div className="bigstat"><b>{(me.done || []).length}</b><span>konsekvenser</span></div>
+              <div className="bigstat"><b>{myCheers}</b><span>skåle</span></div>
             </div>
           </div>
 
@@ -420,7 +509,7 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
             <div className="card card--pad" style={{ borderStyle: me.missionDone ? 'solid' : 'dashed' }}>
               <div className="row row--between">
                 <span className="tiny muted" style={{ fontWeight: 800, letterSpacing: '.06em' }}>🕵️ DIN HEMMELIGE MISSION</span>
-                <b className="small" style={{ color: 'var(--accent-2)' }}>+{myMission.points} XP</b>
+                <b className="small" style={{ color: 'var(--accent-2)' }}>+{myMission.points} point</b>
               </div>
               <p className="small" style={{ margin: '8px 0 0', fontWeight: 700 }}>{myMission.text}</p>
               <p className="tiny muted" style={{ margin: '6px 0 0' }}>Sig det ikke til nogen. De andre kan ikke se hvad du har fået.</p>
@@ -462,7 +551,7 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
                         {m.id === me.id && <span className="tiny muted">(dig)</span>}
                       </div>
                       <div className="tiny muted truncate">
-                        {ml.ico} {ml.title} · 🍺 {m.drinks} · 💧 {m.water}
+                        {ml.ico} {ml.title} · 🍺 {m.drinks} · 🎯 {(m.done || []).length}
                         {m.stop >= 0 && stops[m.stop] ? ` · 📍 ${stops[m.stop].name}` : ''}
                       </div>
                       {m.id !== me.id && pos && typeof m.lat === 'number' && typeof m.lng === 'number' && (
@@ -472,7 +561,7 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
                         </div>
                       )}
                     </div>
-                    <b className="nowrap">{m.xp} XP</b>
+                    <b className="nowrap">{m.xp} point</b>
                   </div>
                 );
               })}
@@ -511,6 +600,11 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
               Du kan roligt gå ud i kortet eller barlisten undervejs – der ligger en bjælke
               nederst der fører dig tilbage hertil.
             </p>
+            {isHost && (
+              <button className="btn btn--accent btn--block" style={{ marginBottom: 10 }} onClick={endNight}>
+                🏁 Afslut aftenen
+              </button>
+            )}
             <button className="btn btn--sm btn--danger" onClick={() => {
               if (!confirm('Forlad turen? Dine point bliver stående, og du kan komme tilbage med linket.')) return;
               clearActiveSession();
@@ -522,8 +616,17 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
       )}
 
       {tab === 'hjul' && (
-        <WheelTab bar={currentBar} done={me.done || []} onComplete={completeChallenge} />
+        <WheelTab
+          bar={currentBar}
+          done={me.done || []}
+          spun={me.spins || {}}
+          spunId={spunId}
+          onSpin={recordSpin}
+          onComplete={completeChallenge}
+        />
       )}
+
+      <Celebration announce={session.announce} />
 
       {tab === 'bingo' && (
         <BingoTab board={me.bingo || []} marks={me.bingoMarks || []} lines={me.bingoLines || 0} onToggle={toggleBingo} />
@@ -580,7 +683,7 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="row" style={{ gap: 6 }}>
                         <b className="truncate">{it.bar.name}</b>
-                        {finale && <span className="chip chip--soon">🔥 Dobbelt XP</span>}
+                        {finale && <span className="chip chip--soon">🔥 Dobbelte point</span>}
                       </div>
                       <div className="small muted">{fmtTime(it.arrive)} – {fmtTime(it.leave)}</div>
                       <div className="tiny muted">
@@ -609,51 +712,82 @@ function SessionBoard({ session, me, now, pos, locate, toast }: BoardProps) {
 
 /* ---------------- hjul-fanen ---------------- */
 
-function WheelTab({ bar, done, onComplete }: {
+function WheelTab({ bar, done, spun, spunId, onSpin, onComplete }: {
   bar: Bar | null;
   done: string[];
+  spun: Record<string, string>;
+  spunId?: string;
+  onSpin: (c: Challenge) => Promise<void>;
   onComplete: (c: Challenge) => Promise<void>;
 }) {
-  const [slices, setSlices] = useState<Challenge[]>(() => drawChallenges(8, { faculty: bar?.faculty, exclude: done }));
-  const [result, setResult] = useState<Challenge | null>(null);
+  // Alt man selv har fået før, ryger ud af puljen – så bliver det sjældent det samme to gange.
+  const brugte = useMemo(() => [...done, ...Object.values(spun || {})], [done, spun]);
+  const [slices, setSlices] = useState<Challenge[]>(() => drawChallenges(8, { faculty: bar?.faculty, exclude: brugte }));
+  const [landed, setLanded] = useState<Challenge | null>(null);
 
-  const reroll = useCallback(() => {
-    setSlices(drawChallenges(8, { faculty: bar?.faculty, exclude: done }));
-    setResult(null);
-  }, [bar?.faculty, done]);
+  useEffect(() => {
+    setSlices(drawChallenges(8, { faculty: bar?.faculty, exclude: brugte }));
+    setLanded(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bar?.id]);
 
-  useEffect(() => { reroll(); }, [bar?.id]); // nyt hjul når man skifter bar
+  if (!bar) {
+    return (
+      <Empty
+        icon="📍"
+        title="Tjek ind først"
+        text="Hjulet drejes når I ankommer til en bar. Gå til Ruten og tryk Tjek ind."
+      />
+    );
+  }
+
+  // Har man allerede drejet her, står resultatet fast.
+  const fastlagt = spunId ? CHALLENGES.find((c) => c.id === spunId) ?? null : null;
+  const vist = fastlagt ?? landed;
+  const gennemfoert = vist ? done.includes(vist.id) : false;
+
+  if (vist) {
+    return (
+      <>
+        <div className="card card--pad center">
+          <span className="tiny muted" style={{ fontWeight: 800, letterSpacing: '.06em' }}>DIN KONSEKVENS PÅ</span>
+          <h3>{bar.name}</h3>
+        </div>
+        <ChallengeCard c={vist}>
+          {gennemfoert ? (
+            <div className="chip chip--open" style={{ marginTop: 12 }}>✓ Gennemført</div>
+          ) : (
+            <button className="btn btn--primary btn--block" style={{ marginTop: 12 }} onClick={() => onComplete(vist)}>
+              ✓ Gennemført
+            </button>
+          )}
+        </ChallengeCard>
+        <div className="card card--pad">
+          <b className="small">Næste drej</b>
+          <p className="small muted" style={{ margin: '6px 0 0' }}>
+            Du får et nyt felt når I tjekker ind på næste bar. Én konsekvens pr. bar – ingen omkast.
+          </p>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
       <div className="card card--pad center">
         <h3>Konsekvenshjulet</h3>
         <p className="small muted" style={{ margin: '4px 0 14px' }}>
-          {bar ? `Konsekvenser til ${bar.name}` : 'Tjek ind på et stop for at få barens egne konsekvenser med'}
+          Drej for {bar.name}. Feltet gælder – der er ingen omkast.
         </p>
-        <Wheel slices={slices} onResult={(c) => setResult(c)} />
+        <Wheel slices={slices} onResult={(c) => { setLanded(c); onSpin(c); }} />
       </div>
-
-      {result && (
-        <ChallengeCard c={result}>
-          <div className="btnrow" style={{ marginTop: 12 }}>
-            <button className="btn btn--primary" onClick={async () => { await onComplete(result); reroll(); }}>
-              ✓ Gennemført
-            </button>
-            <button className="btn" onClick={reroll}>🎡 Nyt hjul</button>
-          </div>
-        </ChallengeCard>
-      )}
-
-      {!result && (
-        <div className="card card--pad">
-          <b className="small">Sådan spiller I</b>
-          <p className="small muted" style={{ margin: '6px 0 0' }}>
-            Drej ved hver bar. Feltet I lander på er konsekvensen – jo sjældnere felt, jo flere XP.
-            Grøn er almindelig, blå er sjælden, gul er legendarisk.
-          </p>
-        </div>
-      )}
+      <div className="card card--pad">
+        <b className="small">Sådan spiller I</b>
+        <p className="small muted" style={{ margin: '6px 0 0' }}>
+          Alle drejer én gang på hver bar. Grøn er almindelig, blå er sjælden, gul er legendarisk –
+          jo sjældnere felt, jo flere point.
+        </p>
+      </div>
     </>
   );
 }
@@ -677,7 +811,7 @@ function BingoTab({ board, marks, lines, onToggle }: {
           <span className="chip">{lines} {lines === 1 ? 'række' : 'rækker'}</span>
         </div>
         <p className="small muted" style={{ margin: '0 0 12px' }}>
-          Tryk på et felt når det sker. Tre på stribe giver {XP.bingoLine} XP.
+          Tryk på et felt når det sker. Tre på stribe giver {XP.bingoLine} point.
         </p>
         <div className="bingo">
           {board.map((tile, i) => (
@@ -688,5 +822,193 @@ function BingoTab({ board, marks, lines, onToggle }: {
         </div>
       </div>
     </>
+  );
+}
+
+/* ---------------- fælles skål ---------------- */
+
+function CheersCard({ session, joined, total, iJoined, onJoin }: {
+  session: Session;
+  joined: number;
+  total: number;
+  iJoined: boolean;
+  onJoin: () => void;
+}) {
+  // Egen sekundviser, så resten af tavlen ikke tegnes om hvert sekund.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const left = msToNextCheers(session, Date.now());
+  const mm = Math.floor(left / 60000);
+  const ss = Math.floor((left % 60000) / 1000);
+
+  if (iJoined) {
+    return (
+      <div className="cheerscard cheerscard--waiting">
+        <b className="small">🥂 Du er med i denne runde</b>
+        <div className="small muted" style={{ margin: '4px 0 8px' }}>
+          {joined} af {total} har skålet · næste runde om
+        </div>
+        <div className="cheers__clock">{mm}:{String(ss).padStart(2, '0')}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="cheerscard">
+      <b>🥂 Fælles skål</b>
+      <div className="small muted" style={{ marginTop: 4 }}>
+        {joined > 0
+          ? `${joined} af ${total} har skålet i denne runde`
+          : 'Ny runde hvert 10. minut – er alle med, får hele holdet bonus'}
+      </div>
+      <button className="cheers__btn" onClick={onJoin}>SKÅL! 🥂</button>
+      <div className="tiny muted" style={{ marginTop: 8 }}>Næste runde om {mm}:{String(ss).padStart(2, '0')}</div>
+    </div>
+  );
+}
+
+/* ---------------- afslutningen ---------------- */
+
+function Finale({ session, meId }: { session: Session; meId: string | null }) {
+  const { dispatch, toast } = useStore();
+  const members = memberList(session);
+
+  const stats: MemberStats[] = members.map((m) => ({
+    id: m.id,
+    name: m.name,
+    emoji: m.emoji,
+    xp: m.xp,
+    drinks: m.drinks || 0,
+    challenges: (m.done || []).length,
+    cheers: Object.values(session.cheers || {}).filter((r) => r && r[m.id]).length,
+    bingoLines: m.bingoLines || 0,
+    rounds: m.rounds || 0,
+    stop: m.stop ?? -1,
+    missionDone: !!m.missionDone,
+    joinedAt: m.joinedAt,
+  }));
+
+  const podium = stats.slice(0, 3);
+  const totalDrinks = stats.reduce((a, b) => a + b.drinks, 0);
+  const totalChallenges = stats.reduce((a, b) => a + b.challenges, 0);
+  const totalRounds = members.reduce((a, b) => a + (b.rounds || 0), 0);
+
+  const won = shareAwards(stats);
+  const drillerier = teases(stats, {
+    drinks: totalDrinks,
+    rounds: totalRounds,
+    challenges: totalChallenges,
+    cheers: stats.reduce((a, b) => a + b.cheers, 0),
+    stops: session.crawl.stops.length,
+  });
+
+  const summaryText = () => {
+    const lines = [`🏁 ${session.crawl.title} – slut!`, ''];
+    stats.forEach((s, i) => lines.push(`${i + 1}. ${s.emoji} ${s.name} – ${s.xp} point`));
+    lines.push('');
+    won.forEach(({ award, winner }) => lines.push(`${award.ico} ${award.title}: ${winner.name} (${award.line(winner)})`));
+    return lines.join(String.fromCharCode(10));
+  };
+
+  const auto = !session.endedAt;
+
+  return (
+    <main className="page stack">
+      <div className="card card--pad center" style={{ background: 'linear-gradient(150deg, var(--brand), var(--brand-2))', color: 'var(--on-brand)', border: 'none' }}>
+        <div style={{ fontSize: 46 }}>🏁</div>
+        <h1 style={{ fontSize: 24, margin: '4px 0 4px' }}>Aftenen er slut</h1>
+        <p className="small" style={{ opacity: .9, margin: 0 }}>{session.crawl.title}</p>
+        {auto && <p className="tiny" style={{ opacity: .75, marginTop: 8 }}>Turen lukkede automatisk efter 20 timer</p>}
+      </div>
+
+      {podium.length > 0 && (
+        <div className="card card--pad">
+          <h3 className="center" style={{ marginBottom: 10 }}>Slutstilling</h3>
+          <div className="podium">
+            {[podium[1], podium[0], podium[2]].map((p, i) => p ? (
+              <div key={p.id} className={'podium__spot podium__spot--' + (i === 1 ? 1 : i === 0 ? 2 : 3)}>
+                <div className="podium__ava">{p.emoji}</div>
+                <div className="podium__block">
+                  <div style={{ fontSize: 19 }}>{i === 1 ? '🥇' : i === 0 ? '🥈' : '🥉'}</div>
+                  <div className="podium__name truncate">{p.name}</div>
+                  <div className="podium__xp">{p.xp} point</div>
+                </div>
+              </div>
+            ) : <div key={i} />)}
+          </div>
+        </div>
+      )}
+
+      <div className="summary">
+        <div className="bigstat"><b>{totalDrinks}</b><span>genstande i alt</span></div>
+        <div className="bigstat"><b>{totalChallenges}</b><span>konsekvenser</span></div>
+        <div className="bigstat"><b>{totalRounds}</b><span>omgange givet</span></div>
+      </div>
+
+      <div>
+        <div className="section__head"><h2>Aftenens priser</h2></div>
+        <div className="stack" style={{ gap: 8 }}>
+          {won.map(({ award, winner }) => (
+            <div key={award.id} className="award">
+              <span className="award__ico">{award.ico}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <b className="small">{award.title}</b>
+                <div className="small">
+                  {winner.emoji} <b>{winner.name}</b> <span className="muted">· {award.line(winner)}</span>
+                </div>
+                <div className="tiny muted" style={{ marginTop: 2 }}>{award.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card card--pad">
+        <h3 style={{ marginBottom: 10 }}>Hele stillingen</h3>
+        <div className="stack" style={{ gap: 8 }}>
+          {stats.map((m, i) => (
+            <div key={m.id} className={'member' + (m.id === meId ? ' member--me' : '')}>
+              <span className={'member__rank member__rank--' + (i + 1)}>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}</span>
+              <span className="member__ava">{m.emoji}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <b className="truncate">{m.name}{m.id === meId ? ' (dig)' : ''}</b>
+                <div className="tiny muted truncate">🍺 {m.drinks} · 🎯 {m.challenges} · 🥂 {m.cheers}</div>
+              </div>
+              <b className="nowrap">{m.xp} point</b>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card card--pad">
+        <h3 style={{ marginBottom: 8 }}>Aftenens dom 🎤</h3>
+        <div className="stack" style={{ gap: 8 }}>
+          {drillerier.map((line, i) => (
+            <p key={i} className="small" style={{ margin: 0, paddingLeft: 18, position: 'relative' }}>
+              <span style={{ position: 'absolute', left: 0 }}>›</span>
+              {line}
+            </p>
+          ))}
+        </div>
+      </div>
+
+      <div className="btnrow">
+        <button className="btn btn--primary" onClick={async () => { await copyText(summaryText()); toast('Resultatet er kopieret'); }}>
+          📋 Kopiér resultatet
+        </button>
+        <button className="btn" onClick={async () => {
+          await nativeShare({ title: session.crawl.title, text: summaryText(), url: sessionUrl(session.code) });
+        }}>↗ Del</button>
+        <button className="btn" onClick={() => { clearActiveSession(); dispatch({ type: 'draftReset' }); navigate('/tur'); }}>
+          🧭 Planlæg næste
+        </button>
+      </div>
+
+      <button className="btn btn--block" onClick={() => { clearActiveSession(); navigate('/'); }}>Til forsiden</button>
+    </main>
   );
 }

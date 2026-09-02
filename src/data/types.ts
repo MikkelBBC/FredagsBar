@@ -86,13 +86,15 @@ export interface Member {
   lastSeen: number;
   /** Antal registrerede genstande */
   drinks: number;
-  /** Antal glas vand - giver ogsaa XP */
-  water: number;
+  /** Antal omgange man har givet til gruppen */
+  rounds?: number;
   xp: number;
   /** Indeks paa det stop personen er ved (-1 = ikke ankommet) */
   stop: number;
   /** Gennemfoerte udfordringer */
   done: string[];
+  /** Hjulets resultat pr. stop: stopIndeks -> konsekvens-id */
+  spins?: Record<string, string>;
   /** Hemmelig mission (id fra MISSIONER) */
   mission?: string;
   missionDone?: boolean;
@@ -121,6 +123,17 @@ export interface FeedEvent {
   xp?: number;
 }
 
+export interface Announce {
+  id: string;
+  t: number;
+  /** Hvad der fejres */
+  kind: 'omgang' | 'skaal' | 'bingo';
+  memberId: string;
+  name: string;
+  emoji: string;
+  text: string;
+}
+
 export interface GameModes {
   /** Lykkehjul med konsekvenser */
   wheel: boolean;
@@ -137,11 +150,18 @@ export interface GameModes {
 export interface Session {
   code: string;
   crawl: Crawl;
+  /** Medlems-id paa den der startede aftenen. 'host' indtil den foerste melder sig ind. */
   hostId: string;
   createdAt: number;
+  /** Sat naar vaerten trykker "Afslut aften" */
+  endedAt?: number;
   modes: GameModes;
   /** Regel trukket for hvert stop: stopIndeks -> regel-id */
   rules?: Record<string, string>;
+  /** Faelles skaal: rundenummer -> medlems-id -> tidspunkt */
+  cheers?: Record<string, Record<string, number>>;
+  /** Seneste fejring alle skal se paa skaermen */
+  announce?: Announce;
   members: Record<string, Member>;
   feed: Record<string, FeedEvent>;
 }

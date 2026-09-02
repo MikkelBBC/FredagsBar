@@ -14,11 +14,11 @@ import { MapView } from '../components/MapView';
 import { Empty, logoUrl } from '../components/ui';
 
 const MODE_LIST: { key: keyof GameModes; ico: string; title: string; text: string }[] = [
-  { key: 'wheel', ico: '🎡', title: 'Konsekvenshjul', text: 'Drej ved hver bar – hjulet giver en konsekvens. Jo sjældnere felt, jo flere XP.' },
+  { key: 'wheel', ico: '🎡', title: 'Konsekvenshjul', text: 'Drej ved hver bar – hjulet giver en konsekvens. Jo sjældnere felt, jo flere point.' },
   { key: 'rules', ico: '👑', title: 'Regelmester', text: 'Den første der tjekker ind trækker en regel der gælder alle på det stop.' },
   { key: 'missions', ico: '🕵️', title: 'Hemmelige missioner', text: 'Alle får en mission kun de selv kan se. Klarer du den i smug, giver det stort.' },
   { key: 'bingo', ico: '🔢', title: 'Bingoplade', text: 'Hver deltager får en 3x3-plade med ting der sker i løbet af aftenen.' },
-  { key: 'finale', ico: '🔥', title: 'Finale', text: 'Sidste stop giver dobbelt XP – så stillingen kan væltes til sidst.' },
+  { key: 'finale', ico: '🔥', title: 'Finale', text: 'Sidste stop giver dobbelte point – så stillingen kan væltes til sidst.' },
 ];
 
 export function Planner({ now }: { now: Date }) {
@@ -238,7 +238,7 @@ export function Planner({ now }: { now: Date }) {
               <h3>🎉 Start fredagsspillet</h3>
               <p className="small muted" style={{ margin: '4px 0 0' }}>
                 Alle får ét link, melder sig ind med navn og figur, og så kører der en live-stilling
-                med XP, genstande og konsekvenser. Vælg hvilke spil der er med i aften.
+                med point, genstande og konsekvenser. Vælg hvilke spil der er med i aften.
               </p>
             </div>
             <div className="stack" style={{ gap: 8 }}>

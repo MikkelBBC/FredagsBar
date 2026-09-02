@@ -88,7 +88,7 @@ export function ChallengeCard({ c, children }: { c: Challenge; children?: React.
         <span className="chip" style={{ background: meta.color, borderColor: meta.color, color: '#fff' }}>
           {CATEGORY_META[c.category].ico} {meta.label}
         </span>
-        <b style={{ color: meta.color }}>+{c.points} XP</b>
+        <b style={{ color: meta.color }}>+{c.points} point</b>
       </div>
       <p style={{ margin: '10px 0 0', fontWeight: 700, fontSize: 15.5 }}>{c.text}</p>
       {children}

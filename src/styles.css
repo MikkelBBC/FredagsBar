@@ -944,3 +944,138 @@ body:has(.livebar) .page { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 7
   padding: 9px 11px;
   animation: sheetup .2s ease-out;
 }
+
+/* ---------- fejring ---------- */
+
+.celebrate {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: grid;
+  place-items: center;
+  background: rgba(10, 16, 13, .72);
+  backdrop-filter: blur(3px);
+  animation: fade .2s;
+  overflow: hidden;
+}
+
+.celebrate__card {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 26px 26px 18px;
+  margin: 20px;
+  max-width: 360px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
+  animation: celebpop .45s cubic-bezier(.2, 1.5, .4, 1);
+}
+@keyframes celebpop { from { transform: scale(.6) rotate(-4deg); opacity: 0; } }
+
+.celebrate__ico { font-size: 62px; line-height: 1; animation: wobble 1.1s ease-in-out infinite; }
+@keyframes wobble {
+  0%, 100% { transform: rotate(-9deg); }
+  50% { transform: rotate(9deg); }
+}
+
+.celebrate__head { display: block; font-size: 27px; font-weight: 900; letter-spacing: .04em; margin-top: 6px; }
+.celebrate__who { font-size: 18px; font-weight: 800; margin: 8px 0 2px; }
+.celebrate__text { font-size: 14px; color: var(--muted); margin: 0 0 12px; }
+
+.celebrate__confetti { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.celebrate__confetti span {
+  position: absolute;
+  top: -40px;
+  font-size: 22px;
+  animation: fall 2.6s linear infinite;
+}
+@keyframes fall {
+  to { transform: translateY(110vh) rotate(420deg); }
+}
+
+/* ---------- fælles skål ---------- */
+
+.cheerscard {
+  border: 2px solid var(--accent);
+  border-radius: var(--r);
+  background: var(--surface);
+  padding: 14px;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+}
+.cheerscard--waiting { border-color: var(--border); border-style: dashed; }
+
+.cheers__btn {
+  width: 100%;
+  padding: 15px;
+  border-radius: var(--r);
+  background: linear-gradient(140deg, var(--accent), var(--accent-2));
+  color: #291d07;
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  margin-top: 10px;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 45%, transparent);
+  animation: throb 1.6s ease-in-out infinite;
+}
+@keyframes throb { 50% { transform: scale(1.025); } }
+.cheers__btn:active { transform: scale(.97); }
+
+.cheers__clock { font-size: 26px; font-weight: 900; font-variant-numeric: tabular-nums; }
+
+/* ---------- finale ---------- */
+
+.podium { display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 8px; align-items: end; margin: 6px 0 4px; }
+.podium__spot { text-align: center; }
+.podium__block {
+  border-radius: 12px 12px 0 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  padding: 8px 4px;
+}
+.podium__spot--1 .podium__block { background: linear-gradient(160deg, var(--accent), var(--accent-2)); border-color: var(--accent); color: #291d07; height: 84px; }
+.podium__spot--2 .podium__block { height: 64px; }
+.podium__spot--3 .podium__block { height: 52px; }
+.podium__ava { font-size: 30px; }
+.podium__name { font-size: 12.5px; font-weight: 800; margin-top: 2px; }
+.podium__xp { font-size: 11px; opacity: .8; }
+
+.award {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface);
+}
+.award__ico { font-size: 27px; line-height: 1.1; flex: none; }
+
+.bigbtn {
+  width: 100%;
+  padding: 16px;
+  border-radius: var(--r);
+  background: linear-gradient(140deg, var(--accent), var(--accent-2));
+  color: #291d07;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.bigbtn:active { transform: scale(.97); }
+
+.mustspin {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  border: 2px solid var(--accent);
+  color: var(--text);
+  animation: throb 1.8s ease-in-out infinite;
+}

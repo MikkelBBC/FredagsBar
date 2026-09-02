@@ -51,7 +51,6 @@ export function newMember(name: string, emoji: string): Member {
     joinedAt: Date.now(),
     lastSeen: Date.now(),
     drinks: 0,
-    water: 0,
     xp: 0,
     stop: -1,
     done: [],
@@ -193,14 +192,52 @@ export const liveIsShared = () => live.backend === 'firebase';
 
 export const XP = {
   join: 10,
-  checkin: 25,
+  checkin: 30,
   /** Bonus til den foerste der tjekker ind paa et stop */
   first: 15,
   drink: 5,
-  water: 8,
-  cheers: 5,
+  /** Med i en faelles skaal */
+  cheers: 15,
+  /** Ekstra naar hele holdet naaede med i samme runde */
+  cheersAll: 25,
   bingoLine: 75,
+  /** Giver man en omgang til gruppen */
+  round: 60,
+  /** Og alle andre faar en tak */
+  roundThanks: 10,
 } as const;
+
+/* ---------------- faelles skaal ---------------- */
+
+/** Der er en faelles skaal hvert 10. minut, regnet fra sessionens start. */
+export const CHEERS_EVERY_MS = 10 * 60 * 1000;
+
+export function cheersRound(session: Session, now: number): number {
+  return Math.max(0, Math.floor((now - session.createdAt) / CHEERS_EVERY_MS));
+}
+
+/** Millisekunder til naeste runde begynder. */
+export function msToNextCheers(session: Session, now: number): number {
+  const elapsed = now - session.createdAt;
+  return CHEERS_EVERY_MS - (((elapsed % CHEERS_EVERY_MS) + CHEERS_EVERY_MS) % CHEERS_EVERY_MS);
+}
+
+export function cheersJoined(session: Session, round: number): string[] {
+  return Object.keys(session.cheers?.[String(round)] || {});
+}
+
+/* ---------------- aftenens afslutning ---------------- */
+
+/** En session lukker af sig selv efter 20 timer, saa gamle ture ikke haenger fast. */
+export const SESSION_MAX_HOURS = 20;
+
+export function sessionEndsAt(session: Session): number {
+  return session.endedAt ?? session.createdAt + SESSION_MAX_HOURS * 3600 * 1000;
+}
+
+export function sessionEnded(session: Session, now: number): boolean {
+  return Boolean(session.endedAt) || now >= session.createdAt + SESSION_MAX_HOURS * 3600 * 1000;
+}
 
 export function memberList(s: Session | null): Member[] {
   if (!s) return [];

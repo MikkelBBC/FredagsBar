@@ -5,6 +5,7 @@ import { fmtDateLong, relativeDay } from '../lib/format';
 import { walkMeters, fmtDistance } from '../lib/geo';
 import { navigate } from '../lib/router';
 import { useStore } from '../lib/store';
+import { getActiveSession } from '../lib/live';
 import { BarCard, SectionHead, AddToCrawlButton, Empty } from '../components/ui';
 
 function greeting(now: Date, name: string): string {
@@ -89,6 +90,18 @@ export function Home({ now }: { now: Date }) {
           </button>
         </div>
       </div>
+
+      {/* Live-aften i gang */}
+      {getActiveSession() && (
+        <button className="card card--pad row" style={{ borderColor: 'var(--brand)', borderWidth: 2, width: '100%', textAlign: 'left' }} onClick={() => navigate('/live/' + getActiveSession())}>
+          <span className="dot" />
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <b style={{ display: 'block' }}>Du er med i en live-aften</b>
+            <span className="small muted">Fortsæt hvor du slap</span>
+          </span>
+          <span className="btn btn--sm btn--primary">Genoptag</span>
+        </button>
+      )}
 
       {/* Din tur i gang */}
       {draftBars.length > 0 && (

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Session } from '../data/types';
 import { levelFor } from '../data/challenges';
-import { clearActiveSession, getActiveSession, live, memberList } from '../lib/live';
+import { clearActiveSession, getActiveSession, live, memberList, sessionEnded } from '../lib/live';
 import { navigate } from '../lib/router';
 
 /**
@@ -32,6 +32,7 @@ export function LiveBar({ hidden }: { hidden: boolean }) {
   }, [code]);
 
   if (hidden || !code || !session) return null;
+  if (sessionEnded(session, Date.now())) return null;
 
   const myId = localStorage.getItem(`mfc200:me:${code}`);
   const me = myId ? session.members?.[myId] : null;
@@ -47,7 +48,7 @@ export function LiveBar({ hidden }: { hidden: boolean }) {
       <span className="livebar__body">
         <b className="truncate">{session.crawl.title}</b>
         <span className="livebar__meta truncate">
-          {lvl.ico} {me.xp} XP · #{rank} af {members.length} · {me.emoji} {me.name}
+          {lvl.ico} {me.xp} point · #{rank} af {members.length} · {me.emoji} {me.name}
         </span>
       </span>
       <span className="livebar__go">Tilbage ›</span>

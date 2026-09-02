@@ -133,6 +133,26 @@ export function Profile({ now }: { now: Date }) {
         )}
       </section>
 
+      {(state.recent || []).length > 0 && (
+        <section>
+          <SectionHead title="Dine live-aftener" />
+          <div className="stack" style={{ gap: 8 }}>
+            {(state.recent || []).map((r) => (
+              <div key={r.code} className="card card--pad row row--between">
+                <div style={{ minWidth: 0 }}>
+                  <b className="truncate" style={{ display: 'block' }}>{r.title}</b>
+                  <span className="small muted">{fmtDateLong(new Date(r.at).toISOString().slice(0, 10))} · kode {r.code}</span>
+                </div>
+                <div className="row" style={{ gap: 6 }}>
+                  <button className="btn btn--sm btn--primary" onClick={() => navigate('/live/' + r.code)}>Åbn</button>
+                  <button className="btn btn--sm" onClick={() => dispatch({ type: 'forgetSession', code: r.code })}>✕</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section>
         <SectionHead title="Gemte ture" linkText="Ny tur" onLink={() => { dispatch({ type: 'draftReset' }); navigate('/tur'); }} />
         {state.crawls.length ? (
